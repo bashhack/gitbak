@@ -1,7 +1,7 @@
 #!/bin/sh
 
-# GitBak - Automatic Commit Safety Net for Pair Programming
-# 
+# gitbak - Automatic Commit Safety Net for Pair Programming
+#
 # This script automatically commits changes to git at regular intervals,
 # providing a safety net for pair programming sessions or long coding sessions.
 #
@@ -12,7 +12,7 @@
 # Configuration (via environment variables):
 #   - INTERVAL_MINUTES: Minutes between commits (default: 5)
 #   - BRANCH_NAME: Custom branch name (default: gitbak-{timestamp})
-#   - COMMIT_PREFIX: Custom commit message prefix (default: "[GitBak] Automatic checkpoint")
+#   - COMMIT_PREFIX: Custom commit message prefix (default: "[gitbak] Automatic checkpoint")
 #   - CREATE_BRANCH: Whether to create a new branch (default: "true")
 #   - VERBOSE: Show/hide informational messages (default: "true")
 #   - SHOW_NO_CHANGES: Show messages when no changes detected (default: "false")
@@ -23,7 +23,7 @@
 
 # Optional debug logging (set DEBUG=true to enable)
 DEBUG=${DEBUG:-"false"}
-LOG_FILE=${LOG_FILE:-"$(pwd)/.gitbak.log"}  # Default log in current directory
+LOG_FILE=${LOG_FILE:-"$(pwd)/.gitbak.log"} # Default log in current directory
 
 # Initialize logging if debug is enabled
 if [ "$DEBUG" = "true" ]; then
@@ -31,24 +31,24 @@ if [ "$DEBUG" = "true" ]; then
     # Create log directory if needed
     LOG_DIR=$(dirname "$LOG_FILE")
     [ "$LOG_DIR" != "." ] && mkdir -p "$LOG_DIR" 2>/dev/null || true
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] GitBak debug logging started" > "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] gitbak debug logging started" >"$LOG_FILE"
 fi
 
 log() {
     # Skip if debug is not enabled
     [ "$DEBUG" != "true" ] && return 0
-    
+
     local level="$1"
     shift
     local msg="$(date '+%Y-%m-%d %H:%M:%S') [$level] $*"
-    
+
     # Always echo errors to console, warnings if verbose
     if [ "$level" = "ERROR" ] || ([ "$VERBOSE" = "true" ] && [ "$level" = "WARNING" ]); then
         echo "$msg"
     fi
-    
+
     # Write to log file
-    echo "$msg" >> "$LOG_FILE"
+    echo "$msg" >>"$LOG_FILE"
 }
 
 # Check for required commands
@@ -63,7 +63,10 @@ check_command() {
 check_command git
 check_command grep
 check_command sed
-check_command shasum || check_command md5sum || { echo "❌ Error: Neither shasum nor md5sum found"; exit 1; }
+check_command shasum || check_command md5sum || {
+    echo "❌ Error: Neither shasum nor md5sum found"
+    exit 1
+}
 
 # Use environment variables if set, otherwise use defaults
 REPO_PATH=${REPO_PATH:-$(pwd)}
@@ -78,84 +81,84 @@ if ! echo "$INTERVAL_MINUTES" | grep -q '^[0-9][0-9]*$' || [ "$INTERVAL_MINUTES"
 fi
 
 BRANCH_NAME=${BRANCH_NAME:-"gitbak-$(date +%Y%m%d-%H%M%S)"}
-COMMIT_PREFIX=${COMMIT_PREFIX:-"[GitBak] Automatic checkpoint"}
+COMMIT_PREFIX=${COMMIT_PREFIX:-"[gitbak] Automatic checkpoint"}
 CREATE_BRANCH=${CREATE_BRANCH:-"true"}
-VERBOSE=${VERBOSE:-"true"}  # Show/hide informational messages
-SHOW_NO_CHANGES=${SHOW_NO_CHANGES:-"false"}  # Show messages when no changes detected
-CONTINUE_SESSION=${CONTINUE_SESSION:-"false"}  # Continue an existing GitBak session
+VERBOSE=${VERBOSE:-"true"}                    # Show/hide informational messages
+SHOW_NO_CHANGES=${SHOW_NO_CHANGES:-"false"}   # Show messages when no changes detected
+CONTINUE_SESSION=${CONTINUE_SESSION:-"false"} # Continue an existing gitbak session
 
 # Track script exit code
 EXIT_CODE=0
 
 # Initialize counters and stats
 COMMITS_MADE=0
-COUNTER=1  # Default starting counter
+COUNTER=1 # Default starting counter
 START_TIME=$(date +%s)
 ORIGINAL_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
-log "INFO" "Starting GitBak on branch: $ORIGINAL_BRANCH"
+log "INFO" "Starting gitbak on branch: $ORIGINAL_BRANCH"
 
 # Function to display summary and clean up on exit
 cleanup() {
-  # Remove the lock file (if we own it)
-  if [ -f "$LOCK_FILE" ] && [ "$(cat "$LOCK_FILE" 2>/dev/null)" = "$$" ]; then
-    log "INFO" "Cleaning up lock file for PID $$"
-    rm -f "$LOCK_FILE"
-  fi
-
-  END_TIME=$(date +%s)
-  DURATION=$((END_TIME - START_TIME))
-  
-  # Format duration as HH:MM:SS (POSIX-compliant)
-  HOURS=`expr $DURATION / 3600`
-  MINUTES=`expr \( $DURATION % 3600 \) / 60`
-  SECONDS=`expr $DURATION % 60`
-  
-  echo ""
-  echo "---------------------------------------------"
-  echo "📊 GitBak Session Summary"
-  echo "---------------------------------------------"
-  echo "✅ Total commits made: $COMMITS_MADE"
-  echo "⏱️  Session duration: ${HOURS}h ${MINUTES}m ${SECONDS}s"
-  if [ "$CREATE_BRANCH" = "true" ]; then
-    echo "🌿 Working branch: $BRANCH_NAME"
-    echo ""
-    echo "To merge these changes to your original branch:"
-    echo "  git checkout $ORIGINAL_BRANCH"
-    echo "  git merge $BRANCH_NAME"
-    echo ""
-    echo "To squash all commits into one:"
-    echo "  git checkout $ORIGINAL_BRANCH"
-    echo "  git merge --squash $BRANCH_NAME"
-    echo "  git commit -m \"Merged GitBak session\""
-  else
-    echo "🌿 Working branch: $ORIGINAL_BRANCH (unchanged)"
-  fi
-  
-  # Show branch visualization if 'git log' is available
-  if command -v git log > /dev/null; then
-    echo ""
-    echo "🔍 Branch visualization (last 10 commits):"
-    echo "---------------------------------------------"
-    # Try to use a more colorful format if possible
-    if git log --graph --oneline --decorate --all --color=always -n 10 > /dev/null 2>&1; then
-      git log --graph --oneline --decorate --all --color=always -n 10
-    else
-      # Fallback to simpler format
-      git log --graph --oneline --decorate -n 10
+    # Remove the lock file (if we own it)
+    if [ -f "$LOCK_FILE" ] && [ "$(cat "$LOCK_FILE" 2>/dev/null)" = "$$" ]; then
+        log "INFO" "Cleaning up lock file for PID $$"
+        rm -f "$LOCK_FILE"
     fi
-  fi
-  
-  echo "---------------------------------------------"
-  echo "🛑 GitBak terminated at $(date)"
-  # Exit with the last error code or 0 if successful
-  exit ${EXIT_CODE:-0}
+
+    END_TIME=$(date +%s)
+    DURATION=$((END_TIME - START_TIME))
+
+    # Format duration as HH:MM:SS (POSIX-compliant)
+    HOURS=$(expr $DURATION / 3600)
+    MINUTES=$(expr \( $DURATION % 3600 \) / 60)
+    SECONDS=$(expr $DURATION % 60)
+
+    echo ""
+    echo "---------------------------------------------"
+    echo "📊 gitbak Session Summary"
+    echo "---------------------------------------------"
+    echo "✅ Total commits made: $COMMITS_MADE"
+    echo "⏱️  Session duration: ${HOURS}h ${MINUTES}m ${SECONDS}s"
+    if [ "$CREATE_BRANCH" = "true" ]; then
+        echo "🌿 Working branch: $BRANCH_NAME"
+        echo ""
+        echo "To merge these changes to your original branch:"
+        echo "  git checkout $ORIGINAL_BRANCH"
+        echo "  git merge $BRANCH_NAME"
+        echo ""
+        echo "To squash all commits into one:"
+        echo "  git checkout $ORIGINAL_BRANCH"
+        echo "  git merge --squash $BRANCH_NAME"
+        echo "  git commit -m \"Merged gitbak session\""
+    else
+        echo "🌿 Working branch: $ORIGINAL_BRANCH (unchanged)"
+    fi
+
+    # Show branch visualization if 'git log' is available
+    if command -v git log >/dev/null; then
+        echo ""
+        echo "🔍 Branch visualization (last 10 commits):"
+        echo "---------------------------------------------"
+        # Try to use a more colorful format if possible
+        if git log --graph --oneline --decorate --all --color=always -n 10 >/dev/null 2>&1; then
+            git log --graph --oneline --decorate --all --color=always -n 10
+        else
+            # Fallback to simpler format
+            git log --graph --oneline --decorate -n 10
+        fi
+    fi
+
+    echo "---------------------------------------------"
+    echo "🛑 gitbak terminated at $(date)"
+    # Exit with the last error code or 0 if successful
+    exit ${EXIT_CODE:-0}
 }
 
 # Set up trap for Ctrl+C and other signals (including HUP for terminal disconnects)
 trap cleanup INT TERM EXIT HUP
 
 # Check if we're in a git repository
-if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "❌ Error: Not a git repository. Please run this script from a git repository."
     log "ERROR" "Not in a git repository"
     exit 1
@@ -171,7 +174,7 @@ LOCK_FILE="/tmp/gitbak-$REPO_HASH.lock"
 TEMP_LOCK_FILE="${LOCK_FILE}.$$"
 
 # Write PID to a temporary file first
-echo $$ > "$TEMP_LOCK_FILE"
+echo $$ >"$TEMP_LOCK_FILE"
 
 # Attempt to create a hard link to the real lock file, which is atomic
 if ln "$TEMP_LOCK_FILE" "$LOCK_FILE" 2>/dev/null; then
@@ -181,20 +184,20 @@ else
     # Lock file exists, check if process is still running
     rm -f "$TEMP_LOCK_FILE"
     PID=$(cat "$LOCK_FILE" 2>/dev/null || echo "unknown")
-    
+
     if ps -p "$PID" >/dev/null 2>&1; then
-        echo "❌ Error: Another GitBak instance is already running for this repository (PID: $PID)"
-        log "ERROR" "Another GitBak instance is already running (PID: $PID)"
+        echo "❌ Error: Another gitbak instance is already running for this repository (PID: $PID)"
+        log "ERROR" "Another gitbak instance is already running (PID: $PID)"
         exit 1
     else
         echo "⚠️  Warning: Found stale lock file. Removing it."
         log "WARNING" "Found stale lock file for PID $PID. Removing it."
         rm -f "$LOCK_FILE"
-        
+
         # Create a new temporary lock file
         TEMP_LOCK_FILE="${LOCK_FILE}.$$"
-        echo $$ > "$TEMP_LOCK_FILE"
-        
+        echo $$ >"$TEMP_LOCK_FILE"
+
         # Try again to create the lock atomically
         if ln "$TEMP_LOCK_FILE" "$LOCK_FILE" 2>/dev/null; then
             rm -f "$TEMP_LOCK_FILE"
@@ -217,16 +220,16 @@ CURRENT_BRANCH=$(git branch --show-current)
 if [ "$CONTINUE_SESSION" = "true" ]; then
     # Using the existing branch, no need to create a new one
     CREATE_BRANCH="false"
-    echo "🔄 Continuing GitBak session on branch: $CURRENT_BRANCH"
-    
+    echo "🔄 Continuing gitbak session on branch: $CURRENT_BRANCH"
+
     # More robust commit number detection - escapes commit prefix for grep
     ESCAPED_PREFIX=$(echo "$COMMIT_PREFIX" | sed 's/[][\\/.*^$]/\\&/g')
-    
+
     # Store failure state of each step in the pipeline
     set -o pipefail 2>/dev/null || log "WARNING" "pipefail not supported in this shell"
-    
+
     # Get the highest commit number from any format
-    git log --pretty=format:"%s" > /tmp/gitbak-log.$$ 2>/dev/null
+    git log --pretty=format:"%s" >/tmp/gitbak-log.$$ 2>/dev/null
     GIT_LOG_EXIT_CODE=$?
     if [ $GIT_LOG_EXIT_CODE -ne 0 ]; then
         log "WARNING" "Failed to get git log history: exit code $GIT_LOG_EXIT_CODE"
@@ -236,10 +239,10 @@ if [ "$CONTINUE_SESSION" = "true" ]; then
         log "INFO" "Detected highest commit number: $HIGHEST_NUM"
         rm -f /tmp/gitbak-log.$$
     fi
-    
+
     # Disable pipefail to avoid affecting the rest of the script
     set +o pipefail 2>/dev/null
-    
+
     if [ -n "$HIGHEST_NUM" ] && [ "$HIGHEST_NUM" != "0" ]; then
         # Start from the next commit number
         COUNTER=$((HIGHEST_NUM + 1))
@@ -251,11 +254,11 @@ elif [ "$CREATE_BRANCH" = "true" ]; then
     # Check if there are uncommitted changes
     if [ -n "$(git status --porcelain)" ]; then
         echo "⚠️  Warning: You have uncommitted changes."
-        echo "Would you like to commit them before creating the GitBak branch? (y/n)"
+        echo "Would you like to commit them before creating the gitbak branch? (y/n)"
         read -r answer
         if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
             git add .
-            if ! git commit -m "Manual commit before starting GitBak session"; then
+            if ! git commit -m "Manual commit before starting gitbak session"; then
                 echo "❌ Error: Failed to create initial commit. Please fix any git issues and try again."
                 rm -f "$LOCK_FILE"
                 exit 1
@@ -263,7 +266,7 @@ elif [ "$CREATE_BRANCH" = "true" ]; then
             echo "✅ Created initial commit"
         fi
     fi
-    
+
     # Check if branch already exists
     if git show-ref --verify --quiet refs/heads/"$BRANCH_NAME"; then
         echo "⚠️  Warning: Branch '$BRANCH_NAME' already exists."
@@ -274,7 +277,7 @@ elif [ "$CREATE_BRANCH" = "true" ]; then
             echo "🌿 Using new branch name: $BRANCH_NAME"
         fi
     fi
-    
+
     # Create and checkout new branch
     if ! git checkout -b "$BRANCH_NAME"; then
         echo "❌ Error: Failed to create new branch. Please check your git configuration."
@@ -286,9 +289,9 @@ else
     echo "🌿 Using current branch: $CURRENT_BRANCH"
 fi
 
-echo "🔄 GitBak started at $(date)"
+echo "🔄 gitbak started at $(date)"
 echo "📂 Repository: $REPO_PATH"
-echo "⏱️  Interval: $INTERVAL_MINUTES minutes"
+echo "⏱️ Interval: $INTERVAL_MINUTES minutes"
 echo "📝 Commit prefix: $COMMIT_PREFIX"
 echo "🔊 Verbose mode: $VERBOSE"
 echo "🔔 Show no-changes messages: $SHOW_NO_CHANGES"
@@ -308,11 +311,11 @@ while true; do
         sleep $((INTERVAL_MINUTES * 60))
         continue
     fi
-    
+
     if [ -n "$GIT_STATUS_OUTPUT" ]; then
         # There are changes to commit
         TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
-        
+
         # Try to add and commit changes
         GIT_ADD_OUTPUT=$(git add . 2>&1)
         GIT_ADD_EXIT_CODE=$?
@@ -323,10 +326,10 @@ while true; do
             sleep $((INTERVAL_MINUTES * 60))
             continue
         fi
-        
+
         # Create a secure temporary file
         COMMIT_OUTPUT="/tmp/gitbak-commit-output.$$"
-        
+
         # Try to commit the changes
         git commit -m "$COMMIT_PREFIX #$COUNTER - $TIMESTAMP" 2>&1 | tee "$COMMIT_OUTPUT"
         # PIPESTATUS is bash-specific, use a POSIX-compliant alternative
@@ -335,8 +338,8 @@ while true; do
             echo "✅ Commit #$COUNTER created at $TIMESTAMP"
             log "INFO" "Successfully created commit #$COUNTER"
             # POSIX-compliant arithmetic
-            COUNTER=`expr $COUNTER + 1`
-            COMMITS_MADE=`expr $COMMITS_MADE + 1`
+            COUNTER=$(expr $COUNTER + 1)
+            COMMITS_MADE=$(expr $COMMITS_MADE + 1)
         else
             echo "⚠️  Warning: Failed to create commit:"
             cat "$COMMIT_OUTPUT"
@@ -348,7 +351,7 @@ while true; do
         echo "ℹ️  No changes to commit at $(date +"%H:%M:%S")"
         log "INFO" "No changes to commit detected"
     fi
-    
+
     # Wait for the next interval
     sleep $((INTERVAL_MINUTES * 60))
 done

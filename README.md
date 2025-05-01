@@ -95,6 +95,41 @@ When your pairing session is complete, you can:
 3. Cherry-pick specific changes
 4. Discard the branch if you don't need the automatic commits
 
+### Integrating Your Changes
+
+The most common approach for integrating GitBak changes back to your main branch is the squash merge:
+
+```bash
+# Switch back to your main branch
+git checkout main
+
+# Combine all GitBak commits into a single change set
+git merge --squash gitbak-TIMESTAMP 
+
+# Create a single, meaningful commit with all changes
+git commit -m "Add feature X from pair programming session"
+```
+
+This approach:
+- Creates a clean, single commit in your main history
+- Preserves all your work in one atomic change
+- Makes code reviews simpler
+- Keeps your commit history tidy
+
+If you want to preserve the detailed history of your session, use a standard merge instead:
+
+```bash
+git checkout main
+git merge gitbak-TIMESTAMP
+```
+
+For more selective integration, cherry-pick specific commits:
+
+```bash
+git checkout main
+git cherry-pick <commit-hash>  # Repeat for each desired commit
+```
+
 ## Advanced Features
 
 ### Session Summary
