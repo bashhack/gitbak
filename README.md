@@ -1,10 +1,10 @@
-# GitBak - Automatic Commit Safety Net for Pair Programming
+# gitbak - Automatic Commit Safety Net for Pair Programming
 
 This lightweight utility script automates creating checkpoint commits during pair programming sessions, providing a safety net against accidental code loss.
 
 ## Purpose
 
-When pair programming (with humans or AI assistants like Claude), the conversation and code changes can move quickly. GitBak provides safety by:
+When pair programming (with humans or AI assistants like Claude), the conversation and code changes can move quickly. gitbak provides safety by:
 
 - Creating automatic commits at regular intervals
 - Making a clean history of your pairing session progress
@@ -53,7 +53,7 @@ CREATE_BRANCH=false ./gitbak.sh
 # Combine multiple options
 INTERVAL_MINUTES=2 COMMIT_PREFIX="[Checkpoint]" ./gitbak.sh
 
-# Continue an existing GitBak session after a break
+# Continue an existing gitbak session after a break
 CONTINUE_SESSION=true ./gitbak.sh
 
 # Enable debug logging
@@ -66,7 +66,7 @@ DEBUG=true ./gitbak.sh
 |----------|---------|-------------|
 | `INTERVAL_MINUTES` | `5` | Minutes between commit checks |
 | `BRANCH_NAME` | `gitbak-TIMESTAMP` | Name for the new branch |
-| `COMMIT_PREFIX` | `[GitBak] Automatic checkpoint` | Prefix for commit messages |
+| `COMMIT_PREFIX` | `[gitbak] Automatic checkpoint` | Prefix for commit messages |
 | `CREATE_BRANCH` | `true` | Whether to create a new branch |
 | `VERBOSE` | `true` | Whether to show informational messages |
 | `SHOW_NO_CHANGES` | `false` | Whether to show messages when no changes are detected |
@@ -97,13 +97,13 @@ When your pairing session is complete, you can:
 
 ### Integrating Your Changes
 
-The most common approach for integrating GitBak changes back to your main branch is the squash merge:
+The most common approach for integrating gitbak changes back to your main branch is the squash merge:
 
 ```bash
 # Switch back to your main branch
 git checkout main
 
-# Combine all GitBak commits into a single change set
+# Combine all gitbak commits into a single change set
 git merge --squash gitbak-TIMESTAMP 
 
 # Create a single, meaningful commit with all changes
@@ -134,7 +134,7 @@ git cherry-pick <commit-hash>  # Repeat for each desired commit
 
 ### Session Summary
 
-When you stop GitBak using Ctrl+C, it provides a session summary with:
+When you stop gitbak using Ctrl+C, it provides a session summary with:
 
 - Total number of commits made
 - Session duration in hours, minutes, and seconds
@@ -144,13 +144,13 @@ When you stop GitBak using Ctrl+C, it provides a session summary with:
 - Timestamp of termination
 
 The branch visualization shows a graphical representation of your commit history, making it easy to see:
-- The relationship between your GitBak branch and the original branch
+- The relationship between your gitbak branch and the original branch
 - All commits created during your session
 - The overall structure of your repository's branches
 
 ### Continuing Sessions
 
-GitBak supports taking breaks and continuing later with the `CONTINUE_SESSION` option:
+gitbak supports taking breaks and continuing later with the `CONTINUE_SESSION` option:
 
 ```bash
 # Step 1: Start a session
@@ -163,14 +163,14 @@ CONTINUE_SESSION=true ./gitbak.sh
 ```
 
 When you set `CONTINUE_SESSION=true`:
-- GitBak stays on the current branch (regardless of `CREATE_BRANCH` setting)
+- gitbak stays on the current branch (regardless of `CREATE_BRANCH` setting)
 - It automatically detects the last commit number and continues sequentially
 - It preserves the branch history and continues where you left off
 - Perfect for lunch breaks, bio breaks, or interruptions during a pair programming session
 
 ### Lock File Protection
 
-GitBak prevents multiple instances from running for the same repository by:
+gitbak prevents multiple instances from running for the same repository by:
 
 - Creating a lock file with the process ID
 - Checking for existing lock files when starting
@@ -190,7 +190,7 @@ The script includes robust error handling:
 
 ### Visual Studio Code
 
-Add GitBak to VS Code Tasks:
+Add gitbak to VS Code Tasks:
 
 1. Create or edit `.vscode/tasks.json`:
 ```json
@@ -198,7 +198,7 @@ Add GitBak to VS Code Tasks:
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Start GitBak",
+      "label": "Start gitbak",
       "type": "shell",
       "command": "/path/to/gitbak.sh",
       "isBackground": true,
@@ -208,21 +208,21 @@ Add GitBak to VS Code Tasks:
 }
 ```
 
-2. Run via `Terminal > Run Task... > Start GitBak`
+2. Run via `Terminal > Run Task... > Start gitbak`
 
 For more details on VS Code tasks, see [VS Code Tasks Documentation](https://code.visualstudio.com/docs/editor/tasks).
 
-### JetBrains IDEs (IntelliJ, WebStorm, etc.)
+### JetBrains IDEs (GoLand, PyCharm, etc.)
 
-Add GitBak as an External Tool:
+Add gitbak as an External Tool:
 
 1. Go to `Preferences/Settings > Tools > External Tools`
 2. Click `+` and configure:
-   - Name: `GitBak`
+   - Name: `gitbak`
    - Program: `/path/to/gitbak.sh`
    - Working directory: `$ProjectFileDir$`
    - Advanced Options: Check "Asynchronous execution"
-3. Run from `Tools > External Tools > GitBak`
+3. Run from `Tools > External Tools > gitbak`
 
 For more details, see [JetBrains External Tools Documentation](https://www.jetbrains.com/help/idea/configuring-third-party-tools.html#local-ext-tools).
 
@@ -232,10 +232,10 @@ Add to your `.emacs` or `init.el`:
 
 ```elisp
 (defun start-gitbak ()
-  "Start GitBak in the current project."
+  "Start gitbak in the current project."
   (interactive)
   (let ((default-directory (or (projectile-project-root) default-directory)))
-    (start-process "gitbak" "*GitBak*" "/path/to/gitbak.sh")))
+    (start-process "gitbak" "*gitbak*" "/path/to/gitbak.sh")))
 
 (global-set-key (kbd "C-c g b") 'start-gitbak)
 ```
@@ -246,7 +246,7 @@ This assumes you have projectile installed. If not, you can simplify to just use
 
 ### Resource Usage
 
-GitBak is designed to be very lightweight:
+gitbak is designed to be very lightweight:
 - Memory usage: Approximately 2-3 MB when running
 - CPU usage: Minimal (only active when checking for changes or committing)
 - Disk usage: Only the space required for Git commits
@@ -254,16 +254,16 @@ GitBak is designed to be very lightweight:
 
 ### Local vs Remote Repositories
 
-GitBak operates entirely locally:
+gitbak operates entirely locally:
 - It does not push changes to remote repositories
 - All commits remain on your local machine until you explicitly push them
 - You maintain complete control over when/if changes go to remote
 
 ### File Handling
 
-GitBak respects your repository's existing `.gitignore` files:
+gitbak respects your repository's existing `.gitignore` files:
 - It does not implement a separate ignore system
-- Any files ignored by Git will also be ignored by GitBak
+- Any files ignored by Git will also be ignored by gitbak
 - Standard Git practices for ignoring files apply
 
 ### Debugging and Troubleshooting
@@ -276,20 +276,20 @@ When issues occur:
 
 Common issues and solutions:
 
-**"Another GitBak instance is running"**
-Check for running GitBak processes:
+**"Another gitbak instance is running"**
+Check for running gitbak processes:
 ```bash
-# Find existing GitBak processes
+# Find existing gitbak processes
 ps aux | grep gitbak.sh
 
-# Kill a specific GitBak process
+# Kill a specific gitbak process
 kill <PID>
 
 # Remove stale lock files (use with caution)
 REPO_HASH=$(echo "$(pwd)" | shasum | cut -d' ' -f1)
 rm -f /tmp/gitbak-$REPO_HASH.lock
 
-# Find all GitBak lock files
+# Find all gitbak lock files
 find /tmp -name "gitbak-*.lock"
 ```
 
@@ -310,18 +310,18 @@ BRANCH_NAME="gitbak-custom" ./gitbak.sh
 
 ## Git Integration Notes
 
-GitBak is intentionally designed to work with standard Git operations and workflows. It:
+gitbak is intentionally designed to work with standard Git operations and workflows. It:
 
 - Creates branches using standard Git commands
 - Makes commits using standard Git commands
 - Follows your repository's .gitignore configuration
 
-### Common Git Operations with GitBak
+### Common Git Operations with gitbak
 
-- **Merging GitBak changes**: Use standard Git merge operations (`git merge`, `git merge --squash`)
+- **Merging gitbak changes**: Use standard Git merge operations (`git merge`, `git merge --squash`)
 - **Cleaning up branches**: Use standard Git branch management (`git branch -D`)
 - **Handling conflicts**: Resolve using Git's standard conflict resolution process
-- **Team usage**: Each team member can run GitBak on their own branches
+- **Team usage**: Each team member can run gitbak on their own branches
 
 For more information on these Git operations, see [Git documentation](https://git-scm.com/doc).
 
@@ -335,5 +335,5 @@ For more information on these Git operations, see [Git documentation](https://gi
 - For longer sessions, consider increasing the interval (`INTERVAL_MINUTES=10`)
 - Use `VERBOSE=false` to minimize output if you're using the script frequently
 - Set `SHOW_NO_CHANGES=true` if you want to see when the script checks but finds no changes
-- When taking a break, use `Ctrl+C` to stop GitBak and `CONTINUE_SESSION=true` to resume later
+- When taking a break, use `Ctrl+C` to stop gitbak and `CONTINUE_SESSION=true` to resume later
 - For multi-day sessions, use `CONTINUE_SESSION=true` each morning to pick up where you left off
