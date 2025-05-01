@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # GitBak - Automatic Commit Safety Net for Pair Programming
 # 
@@ -72,6 +72,10 @@ REPO_PATH=${REPO_PATH:-$(pwd)}
 INTERVAL_MINUTES=${INTERVAL_MINUTES:-5}
 # POSIX-compliant number validation (avoids Bash-specific [[/=~ constructs)
 if ! echo "$INTERVAL_MINUTES" | grep -q '^[0-9][0-9]*$' || [ "$INTERVAL_MINUTES" -lt 1 ]; then
+    echo "⚠️  Warning: Invalid INTERVAL_MINUTES '$INTERVAL_MINUTES'. Using default of 5 minutes."
+    log "WARNING" "Invalid INTERVAL_MINUTES '$INTERVAL_MINUTES', using default of 5 minutes"
+    INTERVAL_MINUTES=5
+fi$' || [ "$INTERVAL_MINUTES" -lt 1 ]; then
     echo "⚠️  Warning: Invalid INTERVAL_MINUTES '$INTERVAL_MINUTES'. Using default of 5 minutes."
     log "WARNING" "Invalid INTERVAL_MINUTES '$INTERVAL_MINUTES', using default of 5 minutes"
     INTERVAL_MINUTES=5
@@ -295,7 +299,7 @@ echo "🔔 Show no-changes messages: $SHOW_NO_CHANGES"
 echo "❓ Press Ctrl+C to stop and view session summary"
 
 # Counter for commit numbering
-COUNTER=${COUNTER:-1}
+COUNTER=1
 
 while true; do
     # Check if there are changes (capture the exit code)
@@ -352,4 +356,4 @@ while true; do
     # Wait for the next interval
     sleep $((INTERVAL_MINUTES * 60))
 done
-# End of script
+# This marks the end of the script
