@@ -2,6 +2,15 @@
   <img src="assets/gitbak_retro_logo.png" alt="gitbak logo" width="300">
 </p>
 
+
+<div align="center">
+
+[![Tests](https://github.com/bashhack/gitbak/actions/workflows/ci.yml/badge.svg)](https://github.com/bashhack/gitbak/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/bashhack/gitbak/graph/badge.svg?token=Y3K7R3MHXH)](https://codecov.io/gh/bashhack/gitbak)
+![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/bashhack/gitbak?utm_source=oss&utm_medium=github&utm_campaign=bashhack%2Fgitbak&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
+</div>
+
 # gitbak - Automatic Commit Safety Net for Pair Programming
 
 This lightweight utility automates creating checkpoint commits during pair programming sessions, providing a safety net against accidental code loss.
@@ -55,17 +64,22 @@ The Go implementation overcomes platform limitations of the shell script version
 ### Shell Script Version
 
 ```bash
-# Clone the repository
-git clone https://github.com/bashhack/gitbak.git
+# Option 1: Install with curl (recommended)
+curl -fsSL https://raw.githubusercontent.com/bashhack/gitbak/main/sh/install.sh | bash
+
+# Option 2: Download from GitHub Releases
+# Visit: https://github.com/bashhack/gitbak/releases
 
 # Navigate to your project repository
 cd /path/to/your/project
 
 # Start the auto-commit process
-/path/to/gitbak/sh/gitbak.sh
+gitbak
 
 # Press Ctrl+C to stop when finished
 ```
+
+For more installation options and detailed instructions, see the [Shell Script Version README](/sh/README.md).
 
 ### Go Version
 
@@ -98,7 +112,7 @@ gitbak
 | Feature         | [Shell Script](sh/README.md)                    | [Go Version](go/README.md)                      |
 |-----------------|-------------------------------------------------|-------------------------------------------------|
 | Dependencies    | Git, common Unix tools                          | Git                                             |
-| Installation    | Copy script, make executable                    | Homebrew, GitHub Releases, or build from source |
+| Installation    | Curl, GitHub Releases, or manual installation   | Homebrew, GitHub Releases, or build from source |
 | Cross-platform  | Unix-like systems with POSIX shell              | Cross-platform (wherever Git is available)      |
 | Resource usage  | ~2-3 MB                                         | ~5-6 MB                                         |
 | Configuration   | Environment variables                           | Command-line flags or Environment variables     |
