@@ -1,4 +1,6 @@
 #!/bin/bash
+set -o pipefail
+
 #
 # gitbak shell script installer
 # This script installs the gitbak shell script to the specified directory
