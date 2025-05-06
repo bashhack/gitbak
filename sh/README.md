@@ -1,4 +1,4 @@
-<p style="text-align: center;">
+<p align="center">
   <img src="/assets/gitbak_retro_logo.png" alt="gitbak logo" width="300">
 </p>
 
@@ -33,26 +33,61 @@ The shell script version of gitbak is designed to be highly portable, working ac
     - find
     - cat
 
+## Installation
+
+### Option 1: One-line Installation (Recommended)
+
+Install gitbak with a single command:
+
+```bash
+# Install to ~/.local/bin (default)
+curl -fsSL https://raw.githubusercontent.com/bashhack/gitbak/main/sh/install.sh | bash
+
+# Or specify a custom installation directory
+curl -fsSL https://raw.githubusercontent.com/bashhack/gitbak/main/sh/install.sh | INSTALL_DIR=/usr/local/bin bash
+```
+
+### Option 2: Download from GitHub Releases
+
+1. Visit the [GitHub Releases page](https://github.com/bashhack/gitbak/releases)
+2. Download the `gitbak.sh` file from the latest release
+3. Make it executable: `chmod +x gitbak.sh`
+4. Move it to a directory in your PATH: `mv gitbak.sh ~/.local/bin/gitbak`
+
+### Option 3: Manual Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/bashhack/gitbak.git
+   ```
+
+2. Install using the Makefile:
+   ```bash
+   cd gitbak/sh
+   make install
+   ```
+
+3. Or manually copy the script:
+   ```bash
+   cp gitbak/sh/gitbak.sh ~/.local/bin/gitbak
+   chmod +x ~/.local/bin/gitbak
+   ```
+
 ## Usage
 
 ### Basic Usage
 
-1. Clone the repository or download the script:
-   ```
-   git clone https://github.com/bashhack/gitbak.git
-   ```
-
-2. Navigate to your project repository:
-   ```
+1. Navigate to your project repository:
+   ```bash
    cd /path/to/your/project
    ```
 
-3. Run the script:
-   ```
-   /path/to/gitbak/sh/gitbak.sh
+2. Run gitbak:
+   ```bash
+   gitbak
    ```
 
-4. Press `Ctrl+C` to stop when finished
+3. Press `Ctrl+C` to stop when finished
 
 ### Configuration Options
 
@@ -60,25 +95,25 @@ The script can be configured using environment variables:
 
 ```bash
 # Change commit interval to 10 minutes
-INTERVAL_MINUTES=10 /path/to/gitbak/sh/gitbak.sh
+INTERVAL_MINUTES=10 gitbak
 
 # Use a custom branch name
-BRANCH_NAME="feature-branch-backup" /path/to/gitbak/sh/gitbak.sh
+BRANCH_NAME="feature-branch-backup" gitbak
 
 # Use a custom commit message prefix
-COMMIT_PREFIX="[WIP] Checkpoint" /path/to/gitbak/sh/gitbak.sh
+COMMIT_PREFIX="[WIP] Checkpoint" gitbak
 
 # Stay on current branch instead of creating a new one
-CREATE_BRANCH=false /path/to/gitbak/sh/gitbak.sh
+CREATE_BRANCH=false gitbak
 
 # Continue an existing gitbak session
-CONTINUE_SESSION=true /path/to/gitbak/sh/gitbak.sh
+CONTINUE_SESSION=true gitbak
 
 # Show more verbose output
-VERBOSE=true /path/to/gitbak/sh/gitbak.sh
+VERBOSE=true gitbak
 
 # Show messages even when no changes are detected
-SHOW_NO_CHANGES=true /path/to/gitbak/sh/gitbak.sh
+SHOW_NO_CHANGES=true gitbak
 ```
 
 ### Environment Variables
