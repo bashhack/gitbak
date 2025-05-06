@@ -100,7 +100,7 @@ install:
 	@cp $(SCRIPT_NAME) $(HOME)/.local/bin/gitbak
 	@chmod +x $(HOME)/.local/bin/gitbak
 	@echo "✅ Installation complete!"
-	@if [[ ":$$PATH:" != *":$(HOME)/.local/bin:"* ]]; then \
+	@if [ "$(shell echo ":$$PATH:" | grep -c ":$(HOME)/.local/bin:")" -eq 0 ]; then \
 		echo "⚠️  Please add ~/.local/bin to your PATH:"; \
 		echo "   export PATH=\"$$HOME/.local/bin:\$$PATH\""; \
 	fi

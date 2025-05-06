@@ -7,7 +7,7 @@
 #   ./run_tests.sh [test1] [test2] ...  # Run specific tests
 #
 
-TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1; pwd)"
 
 ALL_TESTS=(
     "shell_compatibility.sh"
