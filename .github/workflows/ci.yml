@@ -2,10 +2,10 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ '**' ]  # Run on all branches
+    branches: [ main ]  # Only run on pushes to main
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main ]
+    branches: [ main ]  # Run on PRs to main
 
 jobs:
   test-go:
