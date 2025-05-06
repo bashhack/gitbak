@@ -1,4 +1,4 @@
-<p style="text-align: center;">
+<p align="center">
   <img src="assets/gitbak_retro_logo.png" alt="gitbak logo" width="300">
 </p>
 
