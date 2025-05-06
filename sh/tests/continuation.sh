@@ -1,37 +1,35 @@
 #!/bin/bash
-# Test session continuation
 echo "Test 3: Session continuation"
+
+ORIGINAL_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
 TEST_DIR=$(mktemp -d)
-cd "$TEST_DIR"
+cd "$TEST_DIR" || exit 1
 git init
-echo "Initial content" > test.txt
+echo "Initial content" >test.txt
 git add test.txt
 git commit -m "Initial commit"
 
-# Get the path to the gitbak script (one directory up from tests)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
-GITBAK_SCRIPT="$SCRIPT_DIR/gitbak.sh"
+cp "$ORIGINAL_DIR/gitbak.sh" .
+chmod +x gitbak.sh
 
-# Run first GitBak session
-INTERVAL_MINUTES=1 DEBUG=true "$GITBAK_SCRIPT" &
+INTERVAL_MINUTES=1 DEBUG=true ./gitbak.sh &
 GITBAK_PID=$!
 sleep 10
-echo "Change 1" >> test.txt
+echo "Change 1" >>test.txt
 sleep 20
 kill -TERM $GITBAK_PID
 wait $GITBAK_PID
 
-# Run continuation session
-CONTINUE_SESSION=true INTERVAL_MINUTES=1 DEBUG=true "$GITBAK_SCRIPT" &
+CONTINUE_SESSION=true INTERVAL_MINUTES=1 DEBUG=true ./gitbak.sh &
 GITBAK_PID=$!
 sleep 10
-echo "Change 2" >> test.txt
+echo "Change 2" >>test.txt
 sleep 20
 kill -TERM $GITBAK_PID
 wait $GITBAK_PID
 
-# Verify commit numbering
-COMMIT_MSGS=$(git log --pretty=format:"%s" | grep -E "\[GitBak\] #[0-9]+" | sort -r)
+COMMIT_MSGS=$(git log --pretty=format:"%s" | grep -E "\[gitbak\] Automatic checkpoint #[0-9]+" | sort -r)
 FIRST_NUM=$(echo "$COMMIT_MSGS" | head -1 | grep -o "#[0-9]\+" | grep -o "[0-9]\+")
 SECOND_NUM=$(echo "$COMMIT_MSGS" | head -2 | tail -1 | grep -o "#[0-9]\+" | grep -o "[0-9]\+")
 
@@ -43,5 +41,5 @@ else
     echo "$COMMIT_MSGS"
 fi
 
-cd - > /dev/null
+cd - >/dev/null || exit 1
 rm -rf "$TEST_DIR"
