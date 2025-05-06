@@ -1,9 +1,6 @@
-# Binary output
-/bin/
-
 # Build artifacts
-/dist/
-/build/
+go/build/
+go/gitbak
 
 # Test artifacts
 coverage.txt
@@ -11,7 +8,7 @@ coverage.out
 coverage.html
 
 # Dependency directories
-/vendor/
+go/vendor/
 
 # Emacs specific files
 *~

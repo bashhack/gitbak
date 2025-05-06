@@ -1,0 +1,183 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-go:
+    name: Test Go Implementation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./go
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.57.0
+          golangci-lint --version
+
+      - name: Run linters
+        run: make lint
+
+      - name: Run tests
+        run: make test
+
+      - name: Run tests with race detection
+        run: go test -race -tags=testing ./...
+
+      - name: Generate coverage report
+        run: make coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage-report
+          path: ./go/coverage.html
+
+      - name: Run integration tests
+        run: |
+          export GITBAK_INTEGRATION_TESTS=1
+          make test/integration
+
+      - name: Build for all platforms
+        run: make build/all
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitbak-binaries
+          path: ./go/build/bin/*
+          if-no-files-found: error
+
+  test-shell:
+    name: Test Shell Script Implementation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./sh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck
+        run: |
+          shellcheck gitbak.sh
+          shellcheck tests/*.sh
+
+      - name: Run shell compatibility test
+        run: |
+          cd tests
+          ./shell_compatibility.sh
+
+      - name: Run basic functionality test
+        run: |
+          cd tests
+          ./basic_functionality.sh
+
+      - name: Run lock file test
+        run: |
+          cd tests
+          ./lock_file.sh
+
+      - name: Run continuation test
+        run: |
+          cd tests
+          ./continuation.sh
+
+  build-docs:
+    name: Build and Publish Docs
+    runs-on: ubuntu-latest
+    needs: [test-go, test-shell]
+    if: github.ref == 'refs/heads/main' # Only run on main branch
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install godoc
+        run: go install golang.org/x/tools/cmd/godoc@latest
+
+      - name: Generate docs
+        run: |
+          cd go
+          mkdir -p ../docs
+          go doc -all ./... > ../docs/api.md
+          cp README.md ../docs/go.md
+          cd ..
+          cp sh/README.md docs/sh.md
+          cp README.md docs/index.md
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          force_orphan: true
+
+#  release:
+#    name: Release
+#    runs-on: ubuntu-latest
+#    needs: [test-go, test-shell]
+#    if: startsWith(github.ref, 'refs/tags/v')
+#
+#    permissions:
+#      contents: write
+#      packages: write
+#
+#    steps:
+#      - uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Set up Go
+#        uses: actions/setup-go@v5
+#        with:
+#          go-version: '1.24'
+#
+#      - name: Run GoReleaser
+#        uses: goreleaser/goreleaser-action@v5
+#        with:
+#          distribution: goreleaser
+#          version: latest
+#          args: release --clean
+#          workdir: ./go
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+#      - name: Upload shell script version
+#        uses: softprops/action-gh-release@v1
+#        with:
+#          files: |
+#            ./sh/gitbak.sh
+#          generate_release_notes: true
+#          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
