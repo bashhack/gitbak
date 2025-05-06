@@ -4,7 +4,7 @@ echo "Test 3: Session continuation"
 ORIGINAL_DIR=$(cd "$(dirname "$0")/.." && pwd)
 
 TEST_DIR=$(mktemp -d)
-cd "$TEST_DIR"
+cd "$TEST_DIR" || exit 1
 git init
 echo "Initial content" >test.txt
 git add test.txt
@@ -41,5 +41,5 @@ else
     echo "$COMMIT_MSGS"
 fi
 
-cd - >/dev/null
+cd - >/dev/null || exit 1
 rm -rf "$TEST_DIR"

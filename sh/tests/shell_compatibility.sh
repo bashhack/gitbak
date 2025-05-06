@@ -13,7 +13,7 @@ all_passed=true
 echo "Checking syntax compatibility across multiple shells..."
 
 for SHELL_CMD in $SHELLS; do
-    if command -v $SHELL_CMD >/dev/null 2>&1; then
+    if command -v "$SHELL_CMD" >/dev/null 2>&1; then
         echo "Testing on $SHELL_CMD..."
         if $SHELL_CMD -n "$GITBAK_SCRIPT" 2>/tmp/shell_syntax.log; then
             echo "✅ Syntax valid in $SHELL_CMD"

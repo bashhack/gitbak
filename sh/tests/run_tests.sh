@@ -29,10 +29,11 @@ cleanup_processes() {
         echo "Killing gitbak process: $pid"
         kill -TERM "$pid" 2>/dev/null || true
     done
-    
+
     sleep 1
 }
 
+# shellcheck disable=SC2317
 cleanup_and_exit() {
     echo ""
     echo "Interrupt received, stopping tests..."
@@ -62,26 +63,26 @@ for test in "${TESTS[@]}"; do
     else
         test_path="$test"
     fi
-    
+
     test_name=$(basename "$test_path")
-    
+
     echo "Running $test_name..."
-    
+
     log_file=$(mktemp)
-    
+
     start_time=$(date +%s)
     echo "  Started at $(date +"%H:%M:%S")"
-    
+
     "$test_path" > "$log_file" 2>&1
     result=$?
-    
+
     end_time=$(date +%s)
     runtime=$((end_time - start_time))
     echo "  Finished at $(date +"%H:%M:%S") (runtime: ${runtime}s)"
-    
+
     if [ $result -eq 0 ]; then
         echo "✅ $test_name passed"
-        
+
         # Look for success message in the output
         if grep -q "✅.*passed" "$log_file"; then
             grep "✅.*passed" "$log_file" | tail -n 1
@@ -90,7 +91,7 @@ for test in "${TESTS[@]}"; do
             echo "  Last output lines:"
             tail -n 3 "$log_file" | sed 's/^/  /'
         fi
-        
+
         passed=$((passed + 1))
     else
         echo "❌ $test_name failed with exit code $result"
@@ -98,12 +99,12 @@ for test in "${TESTS[@]}"; do
         tail -n 10 "$log_file" | sed 's/^/  /'
         failed=$((failed + 1))
     fi
-    
+
     rm -f "$log_file"
-    
+
     echo "----------------------------"
     echo ""
-    
+
     cleanup_processes
 done
 

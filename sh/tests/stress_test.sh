@@ -4,7 +4,7 @@ echo "Test 4: Stress test with rapid commits"
 ORIGINAL_DIR=$(cd "$(dirname "$0")/.." && pwd)
 
 TEST_DIR=$(mktemp -d)
-cd "$TEST_DIR"
+cd "$TEST_DIR" || exit 1
 
 git init
 echo "Initial content" >test.txt
@@ -38,5 +38,5 @@ else
     cat output.log
 fi
 
-cd - >/dev/null
+cd - >/dev/null || exit 1
 rm -rf "$TEST_DIR"

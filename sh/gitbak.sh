@@ -50,8 +50,7 @@ if [ "$DEBUG" = "true" ]; then
     echo "🔍 Debug logging enabled. Logs will be written to: $LOG_FILE"
     LOG_DIR=$(dirname "$LOG_FILE")
     if [ "$LOG_DIR" != "." ]; then
-        mkdir -p "$LOG_DIR" 2>/dev/null
-        if [ $? -ne 0 ]; then
+        if ! mkdir -p "$LOG_DIR" 2>/dev/null; then
             echo "⚠️ Failed to create log directory: $LOG_DIR"
             # Try using temp directory as fallback
             LOG_FILE="/tmp/gitbak-$REPO_HASH.log"
@@ -64,16 +63,19 @@ fi
 log() {
     [ "$DEBUG" != "true" ] && return 0
 
-    local level="$1"
+    # Using POSIX-compatible variable scoping instead of 'local'
+    _log_level="$1"
     shift
-    local msg="$(date '+%Y-%m-%d %H:%M:%S') [$level] $*"
+    # Separate declaration and assignment to avoid masking return values
+    _log_msg=""
+    _log_msg="$(date '+%Y-%m-%d %H:%M:%S') [$_log_level] $*"
 
     # Always echo errors to console, warnings if verbose
-    if [ "$level" = "ERROR" ] || ([ "$VERBOSE" = "true" ] && [ "$level" = "WARNING" ]); then
-        echo "$msg"
+    if [ "$_log_level" = "ERROR" ] || { [ "$VERBOSE" = "true" ] && [ "$_log_level" = "WARNING" ]; }; then
+        echo "$_log_msg"
     fi
 
-    echo "$msg" >>"$LOG_FILE"
+    echo "$_log_msg" >>"$LOG_FILE"
 }
 
 check_command() {
@@ -136,16 +138,17 @@ cleanup() {
     END_TIME=$(date +%s)
     DURATION=$((END_TIME - START_TIME))
 
-    HOURS=$(expr $DURATION / 3600)
-    MINUTES=$(expr \( $DURATION % 3600 \) / 60)
-    SECONDS=$(expr $DURATION % 60)
+    HOURS=$((DURATION / 3600))
+    MINUTES=$(((DURATION % 3600) / 60))
+    # Rename SECONDS to SECS to avoid conflict with special variable in some shells
+    SECS=$((DURATION % 60))
 
     echo ""
     echo "---------------------------------------------"
     echo "📊 gitbak Session Summary"
     echo "---------------------------------------------"
     echo "✅ Total commits made: $COMMITS_MADE"
-    echo "⏱️  Session duration: ${HOURS}h ${MINUTES}m ${SECONDS}s"
+    echo "⏱️  Session duration: ${HOURS}h ${MINUTES}m ${SECS}s"
     if [ "$CREATE_BRANCH" = "true" ]; then
         echo "🌿 Working branch: $BRANCH_NAME"
         echo ""
@@ -244,6 +247,7 @@ if [ "$CONTINUE_SESSION" = "true" ]; then
 
     # Set pipefail to catch errors in multi-command pipelines so that the script
     # fails if any command in a pipeline is borked, not just the last one
+    # shellcheck disable=SC3040
     set -o pipefail 2>/dev/null || log "WARNING" "pipefail not supported in this shell"
 
     # Get the highest commit number by examining commit messages
@@ -264,6 +268,7 @@ if [ "$CONTINUE_SESSION" = "true" ]; then
     fi
 
     # Disable pipefail to avoid affecting the rest of the script...
+    # shellcheck disable=SC3040
     set +o pipefail 2>/dev/null
 
     # Set the counter to continue from the highest number found
@@ -369,8 +374,8 @@ while true; do
             # Commit succeeded - update the counters
             echo "✅ Commit #$COUNTER created at $TIMESTAMP"
             log "INFO" "Successfully created commit #$COUNTER"
-            COUNTER=$(expr $COUNTER + 1)
-            COMMITS_MADE=$(expr $COMMITS_MADE + 1)
+            COUNTER=$((COUNTER + 1))
+            COMMITS_MADE=$((COMMITS_MADE + 1))
         else
             # Commit failed ...could happen with hooks, permissions, or some other sort of config issues...
             echo "⚠️  Warning: Failed to create commit:"
@@ -386,6 +391,7 @@ while true; do
 
     # Wait for the configured interval before checking again, but check for termination every second
     # This ensures we respond to termination signals promptly
+    # shellcheck disable=SC2034
     for i in $(seq 1 $((INTERVAL_MINUTES * 60))); do
         if [ -f "$TERM_FLAG" ]; then
             log "INFO" "Termination flag detected during sleep, exiting loop"

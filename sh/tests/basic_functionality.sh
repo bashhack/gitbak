@@ -4,7 +4,7 @@ echo "Test 1: Basic functionality"
 ORIGINAL_DIR=$(cd "$(dirname "$0")/.." && pwd)
 
 TEST_DIR=$(mktemp -d)
-cd "$TEST_DIR"
+cd "$TEST_DIR" || exit 1
 
 git init
 echo "Initial content" >test.txt
@@ -35,5 +35,5 @@ else
     echo "❌ Basic functionality test failed: Only $COMMIT_COUNT commits created"
 fi
 
-cd - >/dev/null
+cd - >/dev/null || exit 1
 rm -rf "$TEST_DIR"
