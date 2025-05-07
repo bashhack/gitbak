@@ -8,19 +8,17 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "logger-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("Failed to remove temporary directory: %v", err)
-		}
-	}()
+	t.Parallel()
+	tempDir := t.TempDir()
 
 	logFile := filepath.Join(tempDir, "test.log")
 
 	logger := New(false, logFile, true)
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Logf("Failed to close logger: %v", err)
+		}
+	}() // ensure buffers flushed & handle released
 	if logger == nil {
 		t.Fatal("Expected non-nil logger with debug disabled")
 	}
@@ -38,6 +36,10 @@ func TestNew(t *testing.T) {
 		t.Errorf("Expected log file to be created when debug is enabled: %v", err)
 	}
 
+	if err := logger.Close(); err != nil {
+		t.Fatalf("Failed to close logger: %v", err)
+	}
+
 	content, err := os.ReadFile(logFile)
 	if err != nil {
 		t.Fatalf("Failed to read log file: %v", err)
@@ -49,15 +51,8 @@ func TestNew(t *testing.T) {
 }
 
 func TestLogging(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "logger-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("Failed to remove temporary directory: %v", err)
-		}
-	}()
+	t.Parallel()
+	tempDir := t.TempDir()
 
 	logFile := filepath.Join(tempDir, "test.log")
 
@@ -68,6 +63,10 @@ func TestLogging(t *testing.T) {
 	logger.Warning("Test warning message")
 
 	logger.Error("Test error message")
+
+	if err := logger.Close(); err != nil {
+		t.Fatalf("Failed to close logger: %v", err)
+	}
 
 	content, err := os.ReadFile(logFile)
 	if err != nil {
@@ -88,10 +87,18 @@ func TestLogging(t *testing.T) {
 		t.Error("Expected error message to be logged")
 	}
 
+	// ...Logger is already closed from previous explicit close
+
 	if err := os.Remove(logFile); err != nil && !os.IsNotExist(err) {
 		t.Logf("Failed to remove log file: %v", err)
 	}
+
 	logger = New(false, logFile, true)
+	defer func() {
+		if err := logger.Close(); err != nil {
+			t.Logf("Failed to close logger: %v", err)
+		}
+	}()
 
 	logger.Info("This should not be logged")
 	logger.Warning("This should not be logged")

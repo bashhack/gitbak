@@ -51,16 +51,34 @@ func main() {
 
 		// Wait a short time for the application to respond to context cancellation
 		// If it doesn't stop gracefully within a reasonable time, force termination
-		go func() {
-			time.Sleep(2 * time.Second)
+		time.Sleep(5 * time.Second)
+
+		// If we're still running after the timeout, force cleanup and exit
+		select {
+		case <-ctx.Done():
+			// Context was properly canceled, main function will handle cleanup
+			return
+		default:
+			// Force cleanup and exit if context cancellation didn't work
 			app.CleanupOnSignal()
 			app.exit(0)
-		}()
+		}
 	}()
 
 	// Run the application with the cancellable context
 	if err := app.Run(ctx); err != nil {
-		_, _ = fmt.Fprintf(app.Stderr, "❌ Error: %v\n", err)
-		app.exit(1)
+		// Don't treat context cancellation as an error since that's our normal signal shutdown path
+		if err.Error() != "context canceled" {
+			_, _ = fmt.Fprintf(app.Stderr, "❌ Error: %v\n", err)
+			_ = app.Close()
+			app.exit(1)
+		}
 	}
+
+	// Print summary only if we ran the main gitbak process (not for --logo or --version)
+	// and if the gitbak instance was initialized
+	if !app.Config.ShowLogo && !app.Config.Version && app.Gitbak != nil {
+		app.Gitbak.PrintSummary()
+	}
+	_ = app.Close()
 }

@@ -26,9 +26,10 @@ It's a Go port of the original shell script version with improved architecture, 
 - Handles concurrent executions safely with file locking
 - Continuous tracking with sequential commit numbering
 - Support for continuing sessions
-- Robust error handling and retry logic
+- Robust error handling with configurable retry limits
+- Smart retry logic that resets on different errors or successful operations
 - Terminal disconnect protection (SIGHUP handling)
-- Cross-platform support with native Go implementation
+- Native Go implementation (currently supports Unix-like platforms only, such as Linux, macOS, and BSD)
 
 ## Usage
 
@@ -77,6 +78,9 @@ gitbak -show-no-changes
 # Enable debug logging
 gitbak -debug
 
+# Set custom max retries (0 = retry indefinitely)
+gitbak -max-retries 5
+
 # Display ASCII logo and exit
 gitbak -logo
 ```
@@ -104,6 +108,9 @@ INTERVAL_MINUTES=2 COMMIT_PREFIX="[Checkpoint]" gitbak
 # Continue an existing gitbak session after a break
 CONTINUE_SESSION=true gitbak
 
+# Set custom max retries threshold (0 for unlimited retries)
+MAX_RETRIES=5 gitbak
+
 # Enable debug logging
 DEBUG=true gitbak
 ```
@@ -122,10 +129,11 @@ The following options can be configured via command-line flags:
 - `-show-no-changes`: Show messages when no changes detected
 - `-repo`: Path to repository (default: current directory)
 - `-continue`: Continue from existing branch
+- `-max-retries`: Maximum number of consecutive identical errors before exiting (default: 3, 0 means retry indefinitely)
 - `-debug`: Enable debug logging
 - `-log-file`: Path to log file (default: ~/.local/share/gitbak/logs/gitbak-{repo-hash}.log)
-- `-version`: Print version information and exit
-- `-logo`: Display ASCII logo and exit
+- `-version`: Print version information and exit (no summary is displayed)
+- `-logo`: Display ASCII logo and exit (no summary is displayed)
 
 ### Environment Variables
 
@@ -139,6 +147,7 @@ The following options can be configured via command-line flags:
 | `SHOW_NO_CHANGES`  | `false`                                             | Whether to show messages when no changes are detected  |
 | `REPO_PATH`        | Current directory                                   | Path to repository (if run from elsewhere)             |
 | `CONTINUE_SESSION` | `false`                                             | Continue on current branch and resume commit numbering |
+| `MAX_RETRIES`      | `3`                                                 | Maximum consecutive identical errors before exiting (0 = retry indefinitely) |
 | `DEBUG`            | `false`                                             | Enable detailed logging for troubleshooting            |
 | `LOG_FILE`         | `~/.local/share/gitbak/logs/gitbak-{repo-hash}.log` | Path to debug log file                                 |
 
@@ -213,7 +222,7 @@ When you stop gitbak using Ctrl+C, it provides a session summary with:
 The branch visualization shows a graphical representation of your commit history, making it easy to see:
 - The relationship between your gitbak branch and the original branch
 - All commits that were created during your session
-- The overall structure of your repository's branches
+- The structure of your repository's branches
 
 ### Continuing Sessions
 
@@ -250,6 +259,9 @@ The program includes robust error handling:
 
 - Captures and displays git command errors
 - Retries failed git operations at the next interval check
+- Limits consecutive identical errors with configurable MaxRetries (default: 3)
+- Automatically exits after reaching MaxRetries to prevent infinite error loops
+- Resets the retry counter when errors change or successful operations occur
 - Gracefully handles common git issues
 - Shows detailed error messages for troubleshooting
 
@@ -386,9 +398,11 @@ The Go implementation has been optimized to eliminate other external dependencie
 brew install bashhack/gitbak/gitbak
 ```
 
-### Using GitHub Releases (macOS, Linux, Windows)
+### Using GitHub Releases (macOS, Linux)
 
 Download the appropriate binary for your platform from the [Releases](https://github.com/bashhack/gitbak/releases) page.
+
+**Note**: Windows is currently not supported due to platform-specific differences in file locking mechanisms.
 
 ```shell
 # Example for macOS (arm64)
@@ -452,23 +466,25 @@ This will install the binary to `~/.local/bin/gitbak`. Make sure this directory 
 
 ### Running Tests
 
+gitbak tests are designed to run in parallel for improved performance. The test system automatically detects the number of available CPU cores and limits parallel execution to an appropriate level.
+
 ```shell
-# Run all unit tests
+# Run all unit tests (automatically runs in parallel)
 make test
 
-# Run tests with verbose output
+# Run tests with verbose output (automatically runs in parallel)
 make test/verbose
 
-# Run only quick tests
+# Run only quick tests (automatically runs in parallel)
 make test/short
 
-# Run tests with coverage report
+# Run tests with coverage report (automatically runs in parallel)
 make coverage
 
-# Run function-level coverage report
+# Run function-level coverage report (automatically runs in parallel)
 make coverage/func
 
-# Run integration tests (requires more time)
+# Run integration tests (requires more time, also runs in parallel)
 GITBAK_INTEGRATION_TESTS=1 make test/integration
 ```
 
@@ -480,7 +496,22 @@ gitbak handles the following signals:
 - `SIGTERM`: Gracefully stops the application and prints a summary
 - `SIGHUP`: Handles terminal disconnects properly by cleaning up and exiting gracefully
 
-### Code Quality
+## Platform Compatibility
+
+gitbak currently supports Unix-like operating systems:
+
+- Linux (all major distributions)
+- macOS
+- BSD variants
+
+Windows is **not supported** at this time due to:
+- Platform-specific differences in file locking mechanisms
+- Differences in signal handling
+- Path handling variations
+
+The application will detect Windows environments and show a clear error message. Windows support may be added in future versions.
+
+### Code Quality and CI
 
 ```shell
 # Run linters (go vet, staticcheck)
@@ -489,6 +520,13 @@ make lint
 # Run full audit (format, tidy, lint, test)
 make audit
 ```
+
+The project includes a robust CI workflow that:
+- Runs tests in parallel on multiple platforms (Ubuntu, macOS) 
+- Verifies code quality with linters and static analysis
+- Performs parallel shell test execution
+- Generates and uploads test coverage reports
+- Builds artifacts for multiple platforms
 
 ### Building for Different Platforms
 

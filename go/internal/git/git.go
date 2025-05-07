@@ -19,7 +19,7 @@ type GitbakConfig struct {
 	RepoPath string
 
 	// Commit settings
-	IntervalMinutes int
+	IntervalMinutes float64
 	BranchName      string
 	CommitPrefix    string
 	CreateBranch    bool
@@ -31,6 +31,30 @@ type GitbakConfig struct {
 
 	// When true, disables prompts and uses defaults
 	NonInteractive bool
+
+	// MaxRetries defines how many consecutive errors are allowed before giving up
+	// If zero, will retry indefinitely
+	MaxRetries int
+}
+
+// Validate sanity-checks the config and returns an error if something is wrong.
+func (c *GitbakConfig) Validate() error {
+	if c.RepoPath == "" {
+		return fmt.Errorf("RepoPath must not be empty")
+	}
+	if c.IntervalMinutes <= 0 {
+		return fmt.Errorf("IntervalMinutes must be > 0 (got %.2f)", c.IntervalMinutes)
+	}
+	if c.BranchName == "" {
+		return fmt.Errorf("BranchName must not be empty")
+	}
+	if c.CommitPrefix == "" {
+		return fmt.Errorf("CommitPrefix must not be empty")
+	}
+	if c.MaxRetries < 0 {
+		return fmt.Errorf("MaxRetries cannot be negative (got %d)", c.MaxRetries)
+	}
+	return nil
 }
 
 // Gitbak monitors and auto-commits changes to a git repository
@@ -48,7 +72,11 @@ type Gitbak struct {
 type Logger = common.Logger
 
 // NewGitbak creates a new gitbak instance with default dependencies
-func NewGitbak(config GitbakConfig, logger Logger) *Gitbak {
+func NewGitbak(config GitbakConfig, logger Logger) (*Gitbak, error) {
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid gitbak configuration: %w", err)
+	}
+
 	executor := NewExecExecutor()
 
 	var interactor UserInteractor
@@ -67,7 +95,11 @@ func NewGitbakWithDeps(
 	logger Logger,
 	executor CommandExecutor,
 	interactor UserInteractor,
-) *Gitbak {
+) (*Gitbak, error) {
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid gitbak configuration: %w", err)
+	}
+
 	return &Gitbak{
 		config:       config,
 		logger:       logger,
@@ -75,21 +107,44 @@ func NewGitbakWithDeps(
 		interactor:   interactor,
 		commitsCount: 0,
 		startTime:    time.Now(),
-	}
+	}, nil
 }
 
 // IsRepository checks if the given path is a git repository
-func IsRepository(path string) bool {
+// Returns true if it is a repository, false otherwise.
+// If path is not a repository due to git exit code 128, returns (false, nil).
+// For other errors (git not found, permission issues, etc), returns (false, err).
+func IsRepository(path string) (bool, error) {
 	cmd := exec.Command("git", "-C", path, "rev-parse", "--is-inside-work-tree")
 	executor := NewExecExecutor()
-	return executor.Execute(cmd) == nil
+	// Use background context since this is a utility function
+	ctx := context.Background()
+	if err := executor.Execute(ctx, cmd); err != nil {
+		// Exit code 128 is git's generic fatal error code - for this command,
+		// it typically means the directory is not part of a git repository,
+		// but...it could also indicate other repository-related issues.
+		//
+		// While I'm treating this as a "not a repository" case, I am knowingly
+		// grouping together what could be a number of different issues. For the purposes
+		// of this function, I think it's reasonable to treat them all the same -
+		// as almost any issue with the repository will be fatal to gitbak.
+
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
+			return false, nil
+		}
+
+		// Unexpected failure (git binary missing, permissions, etc)
+		return false, err
+	}
+	return true, nil
 }
 
 // Run starts the gitbak process with the given context for cancellation
 func (g *Gitbak) Run(ctx context.Context) error {
 	g.startTime = time.Now()
 
-	if err := g.initialize(); err != nil {
+	if err := g.initialize(ctx); err != nil {
 		return err
 	}
 
@@ -98,30 +153,30 @@ func (g *Gitbak) Run(ctx context.Context) error {
 
 // initialize prepares the gitbak session by detecting the original branch
 // and configuring the appropriate session mode
-func (g *Gitbak) initialize() error {
+func (g *Gitbak) initialize(ctx context.Context) error {
 	var err error
 
-	g.originalBranch, err = g.getCurrentBranch()
+	g.originalBranch, err = g.getCurrentBranch(ctx)
 	if err != nil {
 		g.logger.Error("Failed to get current branch: %v", err)
 		// Check if it's already a GitError
 		if errors.Is(err, errors.ErrGitOperationFailed) {
 			return err
 		}
-		return errors.Wrap(errors.ErrGitOperationFailed, "failed to get current branch")
+		return errors.Wrap(err, "failed to get current branch")
 	}
 	g.logger.Info("Starting gitbak on branch: %s", g.originalBranch)
 
 	if g.config.ContinueSession {
-		if err := g.setupContinueSession(); err != nil {
+		if err := g.setupContinueSession(ctx); err != nil {
 			return err
 		}
 	} else if g.config.CreateBranch {
-		if err := g.setupNewBranchSession(); err != nil {
+		if err := g.setupNewBranchSession(ctx); err != nil {
 			return err
 		}
 	} else {
-		g.setupCurrentBranchSession()
+		g.setupCurrentBranchSession(ctx)
 	}
 
 	g.displayStartupInfo()
@@ -129,15 +184,18 @@ func (g *Gitbak) initialize() error {
 }
 
 // setupContinueSession configures gitbak for continuing a previous session
-func (g *Gitbak) setupContinueSession() error {
+func (g *Gitbak) setupContinueSession(ctx context.Context) error {
 	g.config.CreateBranch = false
 	g.logger.StatusMessage("🔄 Continuing gitbak session on branch: %s", g.originalBranch)
 
-	highestNum, err := g.findHighestCommitNumber()
+	highestNum, err := g.findHighestCommitNumber(ctx)
 	if err != nil {
 		g.logger.Warning("Failed to find highest commit number: %v", err)
 		g.logger.InfoToUser("No previous commits found with prefix '%s' - starting from commit #1", g.config.CommitPrefix)
 	} else if highestNum > 0 {
+		// Initialize our commits count to the highest number we found
+		// This ensures the commit counter in monitoringLoop starts at the right value
+		g.commitsCount = highestNum
 		g.logger.InfoToUser("Found previous commits - starting from commit #%d", highestNum+1)
 	} else {
 		g.logger.InfoToUser("No previous commits found with prefix '%s' - starting from commit #1", g.config.CommitPrefix)
@@ -147,28 +205,28 @@ func (g *Gitbak) setupContinueSession() error {
 }
 
 // setupNewBranchSession creates and switches to a new branch
-func (g *Gitbak) setupNewBranchSession() error {
-	hasChanges, err := g.hasUncommittedChanges()
+func (g *Gitbak) setupNewBranchSession(ctx context.Context) error {
+	hasChanges, err := g.hasUncommittedChanges(ctx)
 	if err != nil {
 		// If it's already a GitError or already has ErrGitOperationFailed, just return it
 		if errors.Is(err, errors.ErrGitOperationFailed) {
 			return err
 		}
-		return errors.NewGitError("status", nil, errors.Wrap(errors.ErrGitOperationFailed, "failed to check for uncommitted changes"), "")
+		return errors.NewGitError("status", nil, errors.Wrap(err, "failed to check for uncommitted changes"), "")
 	}
 
 	if hasChanges {
 		g.logger.WarningToUser("You have uncommitted changes.")
-		if err := g.handleUncommittedChanges(); err != nil {
+		if err := g.handleUncommittedChanges(ctx); err != nil {
 			return err
 		}
 	}
 
-	if err := g.handleBranchName(); err != nil {
+	if err := g.handleBranchName(ctx); err != nil {
 		return err
 	}
 
-	if err := g.createAndCheckoutBranch(); err != nil {
+	if err := g.createAndCheckoutBranch(ctx); err != nil {
 		return err
 	}
 
@@ -176,8 +234,8 @@ func (g *Gitbak) setupNewBranchSession() error {
 }
 
 // setupCurrentBranchSession uses the current branch for commits
-func (g *Gitbak) setupCurrentBranchSession() {
-	currentBranch, err := g.getCurrentBranch()
+func (g *Gitbak) setupCurrentBranchSession(ctx context.Context) {
+	currentBranch, err := g.getCurrentBranch(ctx)
 	if err != nil {
 		g.logger.Error("Failed to get current branch: %v", err)
 		g.logger.StatusMessage("🌿 Using current branch: unknown")
@@ -187,18 +245,18 @@ func (g *Gitbak) setupCurrentBranchSession() {
 }
 
 // handleUncommittedChanges prompts the user about uncommitted changes
-func (g *Gitbak) handleUncommittedChanges() error {
+func (g *Gitbak) handleUncommittedChanges(ctx context.Context) error {
 	shouldCommit := g.promptForCommit()
 
 	if shouldCommit {
 		addArgs := []string{"."}
-		if err := g.runGitCommand("add", "."); err != nil {
+		if err := g.runGitCommand(ctx, "add", "."); err != nil {
 			return errors.NewGitError("add", addArgs, err, "failed to stage changes")
 		}
 
 		commitMsg := "Manual commit before starting gitbak session"
 		commitArgs := []string{"-m", commitMsg}
-		if err := g.runGitCommand("commit", "-m", commitMsg); err != nil {
+		if err := g.runGitCommand(ctx, "commit", "-m", commitMsg); err != nil {
 			return errors.NewGitError("commit", commitArgs, err, "failed to create initial commit")
 		}
 
@@ -209,15 +267,15 @@ func (g *Gitbak) handleUncommittedChanges() error {
 }
 
 // handleBranchName manages branch name conflicts
-func (g *Gitbak) handleBranchName() error {
-	branchExists, err := g.branchExists(g.config.BranchName)
+func (g *Gitbak) handleBranchName(ctx context.Context) error {
+	branchExists, err := g.branchExists(ctx, g.config.BranchName)
 	if err != nil {
 		// If it's already a GitError or already has ErrGitOperationFailed, just return it
 		if errors.Is(err, errors.ErrGitOperationFailed) {
 			return err
 		}
 		return errors.NewGitError("show-ref", []string{g.config.BranchName},
-			errors.Wrap(errors.ErrGitOperationFailed, "failed to check if branch exists"), "")
+			errors.Wrap(err, "failed to check if branch exists"), "")
 	}
 
 	if branchExists {
@@ -241,9 +299,9 @@ func (g *Gitbak) handleBranchName() error {
 }
 
 // createAndCheckoutBranch creates and checks out a new branch
-func (g *Gitbak) createAndCheckoutBranch() error {
+func (g *Gitbak) createAndCheckoutBranch(ctx context.Context) error {
 	args := []string{"-b", g.config.BranchName}
-	err := g.runGitCommand("checkout", "-b", g.config.BranchName)
+	err := g.runGitCommand(ctx, "checkout", "-b", g.config.BranchName)
 	if err != nil {
 		return errors.NewGitError("checkout", args, err, "failed to create new branch")
 	}
@@ -257,27 +315,70 @@ func (g *Gitbak) displayStartupInfo() {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	g.logger.StatusMessage("🔄 gitbak started at %s", timestamp)
 	g.logger.StatusMessage("📂 Repository: %s", g.config.RepoPath)
-	g.logger.StatusMessage("⏱️  Interval: %d minutes", g.config.IntervalMinutes)
+	g.logger.StatusMessage("⏱️ Interval: %.2f minutes", g.config.IntervalMinutes)
 	g.logger.StatusMessage("📝 Commit prefix: %s", g.config.CommitPrefix)
 	g.logger.StatusMessage("🔊 Verbose mode: %t", g.config.Verbose)
 	g.logger.StatusMessage("🔔 Show no-changes messages: %t", g.config.ShowNoChanges)
 	g.logger.StatusMessage("❓ Press Ctrl+C to stop and view session summary")
 }
 
+// tryOperation executes the provided operation function, tracks errors, and implements retry logic.
+// Returns error if operation fails too many times based on MaxRetries.
+// NOTE: This is exported for testing purposes but should not be used directly by clients!
+func (g *Gitbak) tryOperation(
+	ctx context.Context,
+	errorState *struct {
+		consecutiveErrors int
+		lastErrorMsg      string
+	},
+	operation func() error,
+) error {
+	err := operation()
+	if err != nil {
+		g.logger.Error("Error in operation: %v", err)
+		g.logger.WarningToUser("Error occurred: %v", err)
+
+		currentErrorMsg := err.Error()
+		if currentErrorMsg == errorState.lastErrorMsg {
+			errorState.consecutiveErrors++
+		} else {
+			errorState.consecutiveErrors = 1
+			errorState.lastErrorMsg = currentErrorMsg
+		}
+
+		// Using '>' instead of '>=' to ensure MaxRetries = 1 allows one retry attempt
+		if g.config.MaxRetries > 0 && errorState.consecutiveErrors > g.config.MaxRetries {
+			g.logger.Error("Reached maximum number of consecutive errors (%d). Stopping gitbak.", g.config.MaxRetries)
+			g.logger.WarningToUser("Too many consecutive errors (same error %d times in a row). Stopping gitbak.", errorState.consecutiveErrors)
+			return errors.Wrap(errors.ErrGitOperationFailed,
+				fmt.Sprintf("maximum retries (%d) exceeded with error: %v", g.config.MaxRetries, err))
+		}
+		return err
+	}
+
+	// Reset consecutive errors on success
+	errorState.consecutiveErrors = 0
+	errorState.lastErrorMsg = ""
+	return nil
+}
+
 // monitoringLoop periodically checks for changes and creates commits.
 // It runs until the context is canceled or an unrecoverable error occurs.
 func (g *Gitbak) monitoringLoop(ctx context.Context) error {
-	commitCounter := 1
+	// Initialize commit counter based on commits count
+	// If we're in continue mode, g.commitsCount was already set in setupContinueSession
+	commitCounter := g.commitsCount + 1
 
-	if g.config.ContinueSession {
-		highestNum, err := g.findHighestCommitNumber()
-		if err == nil && highestNum > 0 {
-			commitCounter = highestNum + 1
-		}
-	}
-
-	ticker := time.NewTicker(time.Duration(g.config.IntervalMinutes) * time.Minute)
+	// Convert interval minutes (float) to duration for more precise control
+	interval := time.Duration(g.config.IntervalMinutes*60*1000) * time.Millisecond
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
+	// Track consecutive errors for potential bail-out
+	errorState := struct {
+		consecutiveErrors int
+		lastErrorMsg      string
+	}{}
 
 	for {
 		select {
@@ -286,45 +387,60 @@ func (g *Gitbak) monitoringLoop(ctx context.Context) error {
 			return ctx.Err()
 
 		case <-ticker.C:
-			if err := g.checkAndCommitChanges(commitCounter); err != nil {
-				g.logger.Error("Error in commit cycle: %v", err)
-				g.logger.WarningToUser("Error occurred: %v", err)
-				g.logger.StatusMessage("Will retry in %d minutes.", g.config.IntervalMinutes)
-			} else if g.commitsCount > 0 {
-				commitCounter++
+			opErr := g.tryOperation(ctx, &errorState, func() error {
+				commitWasCreated := false
+
+				if err := g.checkAndCommitChanges(ctx, commitCounter, &commitWasCreated); err != nil {
+					return err
+				}
+
+				if commitWasCreated {
+					commitCounter++
+				}
+
+				return nil
+			})
+
+			// If the operation hit max retries, bubble up the fatal error
+			if opErr != nil && errorState.consecutiveErrors > g.config.MaxRetries {
+				return opErr
 			}
 		}
 	}
 }
 
 // checkAndCommitChanges checks for uncommitted changes and creates a commit if found.
-func (g *Gitbak) checkAndCommitChanges(commitCounter int) error {
-	hasChanges, err := g.hasUncommittedChanges()
+func (g *Gitbak) checkAndCommitChanges(ctx context.Context, commitCounter int, commitWasCreated *bool) error {
+	hasChanges, err := g.hasUncommittedChanges(ctx)
 	if err != nil {
 		// If it's already a GitError or already has ErrGitOperationFailed, just return it
 		if errors.Is(err, errors.ErrGitOperationFailed) {
 			return err
 		}
 		return errors.NewGitError("status", nil,
-			errors.Wrap(errors.ErrGitOperationFailed, "failed to check git status"), "")
+			errors.Wrap(err, "failed to check git status"), "")
 	}
 
 	if hasChanges {
-		return g.createCommit(commitCounter)
-	} else if g.config.ShowNoChanges && g.config.Verbose {
-		g.logger.InfoToUser("No changes to commit at %s", time.Now().Format("15:04:05"))
-		g.logger.Info("No changes to commit detected")
+		*commitWasCreated = true
+		return g.createCommit(ctx, commitCounter)
+	} else {
+		*commitWasCreated = false
+		if g.config.ShowNoChanges && g.config.Verbose {
+			g.logger.InfoToUser("No changes to commit at %s", time.Now().Format("15:04:05"))
+			g.logger.Info("No changes to commit detected")
+		}
 	}
 
 	return nil
 }
 
 // createCommit stages all changes and creates a commit with the configured prefix.
-func (g *Gitbak) createCommit(commitCounter int) error {
+func (g *Gitbak) createCommit(ctx context.Context, commitCounter int) error {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 
 	addArgs := []string{"."}
-	err := g.runGitCommand("add", ".")
+	err := g.runGitCommand(ctx, "add", ".")
 	if err != nil {
 		g.logger.Warning("Failed to stage changes: %v", err)
 		g.logger.WarningToUser("Failed to stage changes: %v", err)
@@ -333,12 +449,12 @@ func (g *Gitbak) createCommit(commitCounter int) error {
 			return err
 		}
 		return errors.NewGitError("add", addArgs,
-			errors.Wrap(errors.ErrGitOperationFailed, "failed to stage changes"), "")
+			errors.Wrap(err, "failed to stage changes"), "")
 	}
 
 	commitMsg := fmt.Sprintf("%s #%d - %s", g.config.CommitPrefix, commitCounter, timestamp)
 	commitArgs := []string{"-m", commitMsg}
-	err = g.runGitCommand("commit", "-m", commitMsg)
+	err = g.runGitCommand(ctx, "commit", "-m", commitMsg)
 	if err != nil {
 		g.logger.Warning("Failed to create commit: %v", err)
 		g.logger.WarningToUser("Failed to create commit: %v", err)
@@ -347,12 +463,13 @@ func (g *Gitbak) createCommit(commitCounter int) error {
 			return err
 		}
 		return errors.NewGitError("commit", commitArgs,
-			errors.Wrap(errors.ErrGitOperationFailed, "failed to create commit"), "")
+			errors.Wrap(err, "failed to create commit"), "")
 	}
 
 	g.logger.Success("Commit #%d created at %s", commitCounter, timestamp)
 	g.logger.Info("Successfully created commit #%d", commitCounter)
-	g.commitsCount++
+
+	g.commitsCount = commitCounter
 
 	return nil
 }
@@ -394,7 +511,9 @@ func (g *Gitbak) PrintSummary() {
 
 // showBranchVisualization displays a visual representation of the branch structure
 func (g *Gitbak) showBranchVisualization() {
-	output, err := g.runGitCommandWithOutput("log", "--graph", "--oneline", "--decorate", "--all", "--color=always", "-n", "10")
+	// Using a background context since this is just for display and not tied to the main app lifecycle
+	ctx := context.Background()
+	output, err := g.runGitCommandWithOutput(ctx, "log", "--graph", "--oneline", "--decorate", "--all", "--color=always", "-n", "10")
 	if err == nil && output != "" {
 		g.logger.StatusMessage("")
 		g.logger.StatusMessage("🔍 Branch visualization (last 10 commits):")
@@ -406,8 +525,8 @@ func (g *Gitbak) showBranchVisualization() {
 // Git operations
 
 // getCurrentBranch returns the name of the current git branch.
-func (g *Gitbak) getCurrentBranch() (string, error) {
-	output, err := g.runGitCommandWithOutput("branch", "--show-current")
+func (g *Gitbak) getCurrentBranch(ctx context.Context) (string, error) {
+	output, err := g.runGitCommandWithOutput(ctx, "branch", "--show-current")
 	if err != nil {
 		return "unknown", err
 	}
@@ -416,8 +535,8 @@ func (g *Gitbak) getCurrentBranch() (string, error) {
 
 // hasUncommittedChanges returns true if the repository contains changes
 // that have not been committed yet.
-func (g *Gitbak) hasUncommittedChanges() (bool, error) {
-	output, err := g.runGitCommandWithOutput("status", "--porcelain")
+func (g *Gitbak) hasUncommittedChanges(ctx context.Context) (bool, error) {
+	output, err := g.runGitCommandWithOutput(ctx, "status", "--porcelain")
 	if err != nil {
 		return false, err
 	}
@@ -425,21 +544,27 @@ func (g *Gitbak) hasUncommittedChanges() (bool, error) {
 }
 
 // branchExists checks if a branch with the given name exists.
-func (g *Gitbak) branchExists(branchName string) (bool, error) {
-	_, err := g.runGitCommandWithOutput("show-ref", "--verify", "--quiet", "refs/heads/"+branchName)
-	if err != nil {
-		// Command returns non-zero if branch doesn't exist
+func (g *Gitbak) branchExists(ctx context.Context, branchName string) (bool, error) {
+	_, err := g.runGitCommandWithOutput(ctx, "show-ref", "--verify", "--quiet", "refs/heads/"+branchName)
+	if err == nil {
+		return true, nil
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		// Exit code 1 is the expected "branch not found" case
 		return false, nil
 	}
-	return true, nil
+	// Unexpected error – bubble up.
+	return false, err
 }
 
 // findHighestCommitNumber parses git log to find the highest sequential commit
 // number used with the configured commit prefix.
-func (g *Gitbak) findHighestCommitNumber() (int, error) {
+func (g *Gitbak) findHighestCommitNumber(ctx context.Context) (int, error) {
 	escapedPrefix := regexp.QuoteMeta(g.config.CommitPrefix)
 
-	output, err := g.runGitCommandWithOutput("log", "--pretty=format:%s")
+	output, err := g.runGitCommandWithOutput(ctx, "log", "--pretty=format:%s")
 	if err != nil {
 		return 0, err
 	}
@@ -461,23 +586,17 @@ func (g *Gitbak) findHighestCommitNumber() (int, error) {
 	return highestNum, nil
 }
 
-// runGitCommand executes a git command in the repository directory.
-func (g *Gitbak) runGitCommand(args ...string) error {
-	baseArgs := []string{"-C", g.config.RepoPath}
-	cmd := exec.Command("git", append(baseArgs, args...)...)
-	cmd.Dir = g.config.RepoPath
-	return g.executor.Execute(cmd)
+// runGitCommand executes a git command in the repository directory with context.
+func (g *Gitbak) runGitCommand(ctx context.Context, args ...string) error {
+	allArgs := append([]string{"-C", g.config.RepoPath}, args...)
+	return g.executor.ExecuteWithContext(ctx, "git", allArgs...)
 }
 
-// runGitCommandWithOutput executes a git command and returns its output.
-func (g *Gitbak) runGitCommandWithOutput(args ...string) (string, error) {
-	baseArgs := []string{"-C", g.config.RepoPath}
-	cmd := exec.Command("git", append(baseArgs, args...)...)
-	cmd.Dir = g.config.RepoPath
-	return g.executor.ExecuteWithOutput(cmd)
+// runGitCommandWithOutput executes a git command and returns its output with context.
+func (g *Gitbak) runGitCommandWithOutput(ctx context.Context, args ...string) (string, error) {
+	allArgs := append([]string{"-C", g.config.RepoPath}, args...)
+	return g.executor.ExecuteWithContextAndOutput(ctx, "git", allArgs...)
 }
-
-// User interaction
 
 // promptForCommit asks if the user wants to commit changes before starting.
 func (g *Gitbak) promptForCommit() bool {

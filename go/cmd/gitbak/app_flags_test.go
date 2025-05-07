@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -51,7 +50,7 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 			expectSuccess: true,
 			checkConfig: func(t *testing.T, app *App) {
 				if app.Config.IntervalMinutes != 15 {
-					t.Errorf("Expected IntervalMinutes=15, got %d", app.Config.IntervalMinutes)
+					t.Errorf("Expected IntervalMinutes=15, got %.1f", app.Config.IntervalMinutes)
 				}
 			},
 		},
@@ -65,7 +64,6 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 				if err == nil {
 					t.Error("Expected validation to fail for interval=0")
 				} else {
-					// Write an error message to stderr for testing
 					_, _ = fmt.Fprintf(app.Stderr, "❌ Error: %v\n", err)
 				}
 			},
@@ -80,7 +78,6 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 				if err == nil {
 					t.Error("Expected validation to fail for interval=-5")
 				} else {
-					// Write an error message to stderr for testing
 					_, _ = fmt.Fprintf(app.Stderr, "❌ Error: %v\n", err)
 				}
 			},
@@ -180,7 +177,7 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 			expectSuccess: true,
 			checkConfig: func(t *testing.T, app *App) {
 				if app.Config.IntervalMinutes != 10 {
-					t.Errorf("Expected IntervalMinutes=10, got %d", app.Config.IntervalMinutes)
+					t.Errorf("Expected IntervalMinutes=10, got %.1f", app.Config.IntervalMinutes)
 				}
 				if app.Config.BranchName != "test-branch" {
 					t.Errorf("Expected BranchName=test-branch, got %s", app.Config.BranchName)
@@ -209,7 +206,7 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 			checkConfig: func(t *testing.T, app *App) {
 				// Command line args should take precedence over env vars
 				if app.Config.IntervalMinutes != 10 {
-					t.Errorf("Expected IntervalMinutes=10 (from CLI), got %d", app.Config.IntervalMinutes)
+					t.Errorf("Expected IntervalMinutes=10 (from CLI), got %.1f", app.Config.IntervalMinutes)
 				}
 			},
 		},
@@ -237,13 +234,19 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 			args:          []string{"gitbak"},
 			expectSuccess: true,
 			checkConfig: func(t *testing.T, app *App) {
-				timestamp := time.Now().Format("20060102-150405")
-				app.Config.BranchName = fmt.Sprintf("gitbak-%s", timestamp)
+				if err := app.Config.Finalize(); err != nil {
+					t.Fatalf("Config.Finalize() failed: %v", err)
+				}
 
-				// The default branch name follows pattern "gitbak-YYYYMMDD-HHMMSS"
-				datePrefix := "gitbak-" + time.Now().Format("20060102")
-				if len(app.Config.BranchName) < len(datePrefix) || app.Config.BranchName[:len(datePrefix)] != datePrefix {
-					t.Errorf("Expected BranchName to start with %s, got %s", datePrefix, app.Config.BranchName)
+				wantPrefix := "gitbak-" + time.Now().Format("20060102")
+				if !strings.HasPrefix(app.Config.BranchName, wantPrefix) {
+					t.Errorf("Expected BranchName to start with %s, got %s", wantPrefix, app.Config.BranchName)
+				}
+
+				expectedLength := len("gitbak-20060102-150405")
+				if len(app.Config.BranchName) != expectedLength {
+					t.Errorf("Expected BranchName length to be %d, got %d: %s",
+						expectedLength, len(app.Config.BranchName), app.Config.BranchName)
 				}
 			},
 		},
@@ -252,39 +255,20 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 	for name, test := range tests {
 		test := test
 		t.Run(name, func(t *testing.T) {
-			var envBackups = make(map[string]string)
-			var envExists = make(map[string]bool)
-
-			for k, v := range test.envVars {
-				originalValue, exists := os.LookupEnv(k)
-				envBackups[k] = originalValue
-				envExists[k] = exists
-				if err := os.Setenv(k, v); err != nil {
-					t.Fatalf("Failed to set environment variable %s: %v", k, err)
-				}
+			if len(test.envVars) == 0 {
+				t.Parallel()
 			}
 
-			// Restore all environment variables after tests
-			defer func() {
-				for k, exists := range envExists {
-					if exists {
-						if err := os.Setenv(k, envBackups[k]); err != nil {
-							t.Logf("Warning: Failed to restore environment variable %s: %v", k, err)
-						}
-					} else {
-						if err := os.Unsetenv(k); err != nil {
-							t.Logf("Warning: Failed to unset environment variable %s: %v", k, err)
-						}
-					}
-				}
-			}()
+			for k, v := range test.envVars {
+				t.Setenv(k, v)
+			}
 
 			testApp := NewDefaultApp(config.VersionInfo{
 				Version: "test",
 				Commit:  "test-commit",
 				Date:    "test-date",
 			})
-
+			testApp.exit = func(int) {}
 			fs := flag.NewFlagSet(test.args[0], flag.ContinueOnError)
 
 			testApp.Config.SetupFlags(fs)
@@ -292,10 +276,9 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 			// Parse only the app-specific args
 			err := fs.Parse(test.args[1:])
 
-			if fs.Parsed() {
-				// Invert booleans back after parsing (they're inverted for CLI ergonomics)
-				testApp.Config.CreateBranch = !testApp.Config.CreateBranch
-				testApp.Config.Verbose = !testApp.Config.Verbose
+			if fs.Parsed() && testApp.Config.ParsedNoBranch != nil && testApp.Config.ParsedQuiet != nil {
+				testApp.Config.CreateBranch = !(*testApp.Config.ParsedNoBranch)
+				testApp.Config.Verbose = !(*testApp.Config.ParsedQuiet)
 			}
 
 			var exitCalled bool
@@ -346,7 +329,9 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 
 // TestAppRunWithUnknownFlag tests how the app handles unknown flags
 func TestAppRunWithUnknownFlag(t *testing.T) {
+	t.Parallel()
 	testApp := NewDefaultApp(config.VersionInfo{})
+	testApp.exit = func(int) {}
 
 	fs := flag.NewFlagSet("gitbak", flag.ContinueOnError)
 	testApp.Config.SetupFlags(fs)
@@ -366,10 +351,9 @@ func TestAppRunWithUnknownFlag(t *testing.T) {
 
 	err := fs.Parse([]string{"-unknown-flag"})
 
-	if fs.Parsed() {
-		// Invert booleans back after parsing (they're inverted for CLI ergonomics)
-		testApp.Config.CreateBranch = !testApp.Config.CreateBranch
-		testApp.Config.Verbose = !testApp.Config.Verbose
+	if fs.Parsed() && testApp.Config.ParsedNoBranch != nil && testApp.Config.ParsedQuiet != nil {
+		testApp.Config.CreateBranch = !(*testApp.Config.ParsedNoBranch)
+		testApp.Config.Verbose = !(*testApp.Config.ParsedQuiet)
 	}
 
 	if err == nil && !exitCalled {
@@ -383,9 +367,11 @@ func TestAppRunWithUnknownFlag(t *testing.T) {
 
 // TestAppHelpFlag tests that the help flag works correctly
 func TestAppHelpFlag(t *testing.T) {
+	// We can't use t.Parallel() since we're using t.Setenv later
 	fs := flag.NewFlagSet("gitbak", flag.ContinueOnError)
 
 	testApp := NewDefaultApp(config.VersionInfo{})
+	testApp.exit = func(int) {}
 
 	var stdout bytes.Buffer
 	fs.SetOutput(&stdout)
@@ -412,10 +398,7 @@ func TestAppHelpFlag(t *testing.T) {
 	}
 
 	// The non-interactive flag is only available when GITBAK_TESTING=1
-	// Set the environment variable for this test
-	if err := os.Setenv("GITBAK_TESTING", "1"); err != nil {
-		t.Fatalf("Failed to set GITBAK_TESTING environment variable: %v", err)
-	}
+	t.Setenv("GITBAK_TESTING", "1")
 
 	// Re-create the flag set with the environment variable set
 	fs = flag.NewFlagSet("gitbak", flag.ContinueOnError)

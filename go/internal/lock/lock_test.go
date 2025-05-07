@@ -13,7 +13,8 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	repoPath := "/tmp/test-repo"
+	t.Parallel()
+	repoPath := t.TempDir()
 	locker, err := New(repoPath)
 
 	if err != nil {
@@ -38,7 +39,8 @@ func TestNew(t *testing.T) {
 }
 
 func TestAcquireAndRelease(t *testing.T) {
-	repoPath := filepath.Join(os.TempDir(), "gitbak-test-repo-"+t.Name())
+	t.Parallel()
+	repoPath := t.TempDir()
 
 	locker1, err := New(repoPath)
 	if err != nil {
@@ -103,11 +105,12 @@ func TestAcquireAndRelease(t *testing.T) {
 }
 
 func TestConcurrentLocks(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping concurrency test in short mode")
 	}
 
-	repoPath := filepath.Join(os.TempDir(), "gitbak-test-repo-"+t.Name())
+	repoPath := t.TempDir()
 
 	done := make(chan bool)
 
@@ -154,7 +157,8 @@ func TestConcurrentLocks(t *testing.T) {
 }
 
 func TestStaleLockDetection(t *testing.T) {
-	repoPath := filepath.Join(os.TempDir(), "gitbak-test-repo-stale-"+t.Name())
+	t.Parallel()
+	repoPath := t.TempDir()
 
 	locker1, err := New(repoPath)
 	if err != nil {
@@ -202,7 +206,7 @@ func TestStaleLockDetection(t *testing.T) {
 
 // TestHandleStaleLockPathValid tests handleStaleLock with a valid path
 func TestHandleStaleLockPathValid(t *testing.T) {
-	repoPath := filepath.Join(os.TempDir(), "gitbak-test-repo-stale-path-"+t.Name())
+	repoPath := t.TempDir()
 
 	locker, err := New(repoPath)
 	if err != nil {
@@ -220,15 +224,7 @@ func TestHandleStaleLockPathValid(t *testing.T) {
 		t.Fatalf("Failed to check lock file: %v", err)
 	}
 
-	tempDir, err := os.MkdirTemp("", "gitbak-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("Failed to remove temp dir: %v", err)
-		}
-	}()
+	tempDir := t.TempDir()
 
 	// Use a custom lock file path with write permissions
 	customLockFile := filepath.Join(tempDir, "lock")
@@ -263,22 +259,14 @@ func TestHandleStaleLockPathValid(t *testing.T) {
 
 // TestHandleStaleLockCloseError tests error when closing the file descriptor
 func TestHandleStaleLockCloseError(t *testing.T) {
-	repoPath := filepath.Join(os.TempDir(), "gitbak-test-stale-close-error-"+t.Name())
+	repoPath := t.TempDir()
 
 	locker, err := New(repoPath)
 	if err != nil {
 		t.Fatalf("Failed to create locker: %v", err)
 	}
 
-	tempDir, err := os.MkdirTemp("", "gitbak-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("Failed to remove temp dir: %v", err)
-		}
-	}()
+	tempDir := t.TempDir()
 
 	customLockFile := filepath.Join(tempDir, "lock")
 
@@ -314,22 +302,14 @@ func TestHandleStaleLockCloseError(t *testing.T) {
 
 // TestHandleStaleLockRemoveError tests error when removing the stale lock file
 func TestHandleStaleLockRemoveError(t *testing.T) {
-	repoPath := filepath.Join(os.TempDir(), "gitbak-test-stale-remove-error-"+t.Name())
+	repoPath := t.TempDir()
 
 	locker, err := New(repoPath)
 	if err != nil {
 		t.Fatalf("Failed to create locker: %v", err)
 	}
 
-	tempDir, err := os.MkdirTemp("", "gitbak-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("Failed to remove temp dir: %v", err)
-		}
-	}()
+	tempDir := t.TempDir()
 
 	locker.lockFile = filepath.Join(tempDir, "non-existent-file")
 
@@ -341,7 +321,7 @@ func TestHandleStaleLockRemoveError(t *testing.T) {
 
 // TestHandleStaleLockOpenError tests error when opening the new lock file
 func TestHandleStaleLockOpenError(t *testing.T) {
-	repoPath := filepath.Join(os.TempDir(), "gitbak-test-stale-open-error-"+t.Name())
+	repoPath := t.TempDir()
 	locker, err := New(repoPath)
 	if err != nil {
 		t.Fatalf("Failed to create locker: %v", err)
@@ -405,15 +385,7 @@ func TestHandleStaleLockOpenError(t *testing.T) {
 // to make reliable across platforms because of file locking behaviors
 // variance - so ¯\_(ツ)_/¯ ... this can probably be tested better somehow...
 func TestHandleStaleLockFlockError(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "gitbak-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("Failed to remove temp dir: %v", err)
-		}
-	}()
+	tempDir := t.TempDir()
 
 	// Create a file that will be our lock target
 	lockFile := filepath.Join(tempDir, "lock")
@@ -443,36 +415,30 @@ func TestHandleStaleLockFlockError(t *testing.T) {
 
 	// Try to open with O_EXCL, which should fail
 	// This directly tests the behavior in handleStaleLock...
-	_, err = os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0666)
+	_, fileErr := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0666)
 
-	if err == nil {
+	if fileErr == nil {
 		t.Errorf("Expected to fail creating file with O_EXCL when it already exists")
 	} else {
-		if !os.IsExist(err) {
-			t.Errorf("Expected 'file exists' error, got: %v", err)
+		if !os.IsExist(fileErr) {
+			t.Errorf("Expected 'file exists' error, got: %v", fileErr)
 		}
 	}
 }
 
 // TestHandleStaleLockWriteError tests the writing part of handleStaleLock
 func TestHandleStaleLockWriteError(t *testing.T) {
-	repoPath := filepath.Join(os.TempDir(), "gitbak-test-repo-stale-write-error-"+t.Name())
+	repoPath := t.TempDir()
 
 	locker, err := New(repoPath)
 	if err != nil {
 		t.Fatalf("Failed to create locker: %v", err)
 	}
 
-	testDir, err := os.MkdirTemp("", "gitbak-lock-test-")
-	if err != nil {
-		t.Fatalf("Failed to create test directory: %v", err)
-	}
+	testDir := t.TempDir()
 	defer func() {
 		if err := os.Chmod(testDir, 0755); err != nil {
 			t.Logf("Warning: Failed to restore directory permissions: %v", err)
-		}
-		if err := os.RemoveAll(testDir); err != nil {
-			t.Logf("Failed to clean up test directory: %v", err)
 		}
 	}()
 
@@ -515,7 +481,7 @@ func TestHandleStaleLockWriteError(t *testing.T) {
 
 // TestLockWithRunningProcess simulates another process holding the lock
 func TestLockWithRunningProcess(t *testing.T) {
-	repoPath := filepath.Join(os.TempDir(), "gitbak-test-repo-running-"+t.Name())
+	repoPath := t.TempDir()
 
 	locker1, err := New(repoPath)
 	if err != nil {
@@ -546,7 +512,6 @@ func TestLockWithRunningProcess(t *testing.T) {
 
 	// For this test, we'll use a real running process (our own process)
 	// and we'll verify the correct error message is returned
-
 	locker2, err := New(repoPath)
 	if err != nil {
 		t.Fatalf("Failed to create second locker: %v", err)

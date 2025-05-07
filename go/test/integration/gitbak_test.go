@@ -16,50 +16,41 @@ import (
 func setupTestRepo(t *testing.T) string {
 	t.Helper()
 
-	tempDir, err := os.MkdirTemp("", "gitbak-integration-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
+	tempDir := t.TempDir()
 
 	cmd := exec.Command("git", "init", tempDir)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
-		os.RemoveAll(tempDir)
 		t.Fatalf("Failed to initialize git repo: %v", err)
 	}
 
 	cmd = exec.Command("git", "-C", tempDir, "config", "user.email", "test@example.com")
 	err = cmd.Run()
 	if err != nil {
-		os.RemoveAll(tempDir)
 		t.Fatalf("Failed to configure git user email: %v", err)
 	}
 
 	cmd = exec.Command("git", "-C", tempDir, "config", "user.name", "Test User")
 	err = cmd.Run()
 	if err != nil {
-		os.RemoveAll(tempDir)
 		t.Fatalf("Failed to configure git user name: %v", err)
 	}
 
 	initialFile := filepath.Join(tempDir, "initial.txt")
 	err = os.WriteFile(initialFile, []byte("Initial content"), 0644)
 	if err != nil {
-		os.RemoveAll(tempDir)
 		t.Fatalf("Failed to create initial file: %v", err)
 	}
 
 	cmd = exec.Command("git", "-C", tempDir, "add", "initial.txt")
 	err = cmd.Run()
 	if err != nil {
-		os.RemoveAll(tempDir)
 		t.Fatalf("Failed to add initial file: %v", err)
 	}
 
 	cmd = exec.Command("git", "-C", tempDir, "commit", "-m", "Initial commit")
 	err = cmd.Run()
 	if err != nil {
-		os.RemoveAll(tempDir)
 		t.Fatalf("Failed to create initial commit: %v", err)
 	}
 
@@ -74,17 +65,17 @@ func TestBasicFunctionality(t *testing.T) {
 	}
 
 	repoPath := setupTestRepo(t)
-	defer os.RemoveAll(repoPath)
 
 	gitbakBin := filepath.Join("..", "..", "build", "gitbak")
 	if _, err := os.Stat(gitbakBin); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-o", gitbakBin, "../../cmd/gitbak")
+		buildCmd := exec.Command("go", "build", "-tags=testing", "-o", gitbakBin, "../../cmd/gitbak")
 		if err := buildCmd.Run(); err != nil {
 			t.Fatalf("Failed to build gitbak binary: %v", err)
 		}
 	}
 
-	cmd := exec.Command(gitbakBin, "-interval", "1", "-debug", "-repo", repoPath, "-non-interactive")
+	cmd := exec.Command(gitbakBin, "-interval", "0.1", "-debug", "-repo", repoPath, "-non-interactive")
+	cmd.Env = append(os.Environ(), "GITBAK_TESTING=1")
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Failed to start gitbak: %v", err)
 	}
@@ -95,7 +86,7 @@ func TestBasicFunctionality(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	testFile := filepath.Join(repoPath, "test.txt")
 	err := os.WriteFile(testFile, []byte("Change 1\n"), 0644)
@@ -104,7 +95,7 @@ func TestBasicFunctionality(t *testing.T) {
 	}
 	t.Logf("Made change 1 at %s", time.Now().Format("15:04:05"))
 
-	time.Sleep(120 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	err = os.WriteFile(testFile, []byte("Change 1\nChange 2\n"), 0644)
 	if err != nil {
@@ -112,7 +103,7 @@ func TestBasicFunctionality(t *testing.T) {
 	}
 	t.Logf("Made change 2 at %s", time.Now().Format("15:04:05"))
 
-	time.Sleep(120 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	err = os.WriteFile(testFile, []byte("Change 1\nChange 2\nChange 3\n"), 0644)
 	if err != nil {
@@ -120,7 +111,7 @@ func TestBasicFunctionality(t *testing.T) {
 	}
 	t.Logf("Made change 3 at %s", time.Now().Format("15:04:05"))
 
-	time.Sleep(120 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	if err := cmd.Process.Kill(); err != nil {
 		t.Fatalf("Failed to kill gitbak process: %v", err)
@@ -148,18 +139,18 @@ func TestLockFile(t *testing.T) {
 	}
 
 	repoPath := setupTestRepo(t)
-	defer os.RemoveAll(repoPath)
 
 	gitbakBin := filepath.Join("..", "..", "build", "gitbak")
 	if _, err := os.Stat(gitbakBin); os.IsNotExist(err) {
 		// Try to build it
-		buildCmd := exec.Command("go", "build", "-o", gitbakBin, "../../cmd/gitbak")
+		buildCmd := exec.Command("go", "build", "-tags=testing", "-o", gitbakBin, "../../cmd/gitbak")
 		if err := buildCmd.Run(); err != nil {
 			t.Fatalf("Failed to build gitbak binary: %v", err)
 		}
 	}
 
 	cmd1 := exec.Command(gitbakBin, "-interval", "60", "-debug", "-repo", repoPath, "-non-interactive")
+	cmd1.Env = append(os.Environ(), "GITBAK_TESTING=1")
 	if err := cmd1.Start(); err != nil {
 		t.Fatalf("Failed to start first gitbak instance: %v", err)
 	}
@@ -173,6 +164,7 @@ func TestLockFile(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	cmd2 := exec.Command(gitbakBin, "-interval", "60", "-debug", "-repo", repoPath, "-non-interactive")
+	cmd2.Env = append(os.Environ(), "GITBAK_TESTING=1")
 	output, err := cmd2.CombinedOutput()
 
 	if err == nil {

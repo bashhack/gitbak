@@ -8,7 +8,8 @@ endif
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE    ?= $(shell date +%FT%T%z)
-LDFLAGS := -ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
+LDVARS  := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
+LDFLAGS := -ldflags "$(LDVARS)"
 
 BINARY_NAME=gitbak
 BUILD_DIR=build
@@ -39,43 +40,48 @@ run:
 	@echo "ℹ️  For system-wide use, run 'make install' first."
 	@go run $(LDFLAGS) ./$(CMD_DIR)
 
+# Determine optimal number of parallel tests (min of CPU count and 8)
+# This ensures we don't overwhelm systems with many cores
+PARALLEL_COUNT := $(shell cores=$$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4); \
+                     if [ $$cores -gt 8 ]; then echo 8; else echo $$cores; fi)
+
 ## test: Run test suite
 .PHONY: test
 test:
-	@echo 'Running tests with the "testing" build tag...'
-	@go test -v -tags=testing ./...
+	@echo 'Running tests with the "test" build tag using $(PARALLEL_COUNT) parallel tests...'
+	@go test -v -tags=test -parallel=$(PARALLEL_COUNT) ./...
 
 ## test/short: Run only fast tests, skipping slow or external tests
 .PHONY: test/short
 test/short:
-	@echo 'Running short tests only with the "testing" build tag...'
-	@go test -short -tags=testing ./...
+	@echo 'Running short tests only with the "test" build tag using $(PARALLEL_COUNT) parallel tests...'
+	@go test -short -tags=test -parallel=$(PARALLEL_COUNT) ./...
 
 ## test/verbose: Run tests with verbose output
 .PHONY: test/verbose
 test/verbose:
-	@echo 'Running tests with verbose output and the "testing" build tag...'
-	@go test -v -tags=testing ./...
+	@echo 'Running tests with verbose output and the "test" build tag using $(PARALLEL_COUNT) parallel tests...'
+	@go test -v -tags=test -parallel=$(PARALLEL_COUNT) ./...
 
 ## test/integration: Run integration tests
 .PHONY: test/integration
 test/integration:
-	@echo 'Running integration tests with "integration,testing" build tags...'
-	@GITBAK_INTEGRATION_TESTS=1 go test -v -tags=integration,testing ./test/integration
+	@echo 'Running integration tests with "integration,test" build tags using $(PARALLEL_COUNT) parallel tests...'
+	@GITBAK_INTEGRATION_TESTS=1 go test -v -tags=integration,test -parallel=$(PARALLEL_COUNT) -timeout 5m ./test/integration
 
 ## coverage: Run test suite with coverage
 .PHONY: coverage
 coverage:
-	@echo 'Running tests with coverage and the "testing" build tag...'
-	@go test -coverprofile=coverage.txt -tags=testing ./...
+	@echo 'Running tests with coverage and the "test" build tag using $(PARALLEL_COUNT) parallel tests...'
+	@go test -coverprofile=coverage.txt -tags=test -parallel=$(PARALLEL_COUNT) ./...
 	@go tool cover -html=coverage.txt -o coverage.html
 	@echo "Coverage report generated at coverage.html"
 
 ## coverage/func: Show function-level coverage statistics
 .PHONY: coverage/func
 coverage/func:
-	@echo 'Generating function-level coverage report with the "testing" build tag...'
-	@go test -coverprofile=coverage.txt -tags=testing ./...
+	@echo 'Generating function-level coverage report with the "test" build tag using $(PARALLEL_COUNT) parallel tests...'
+	@go test -coverprofile=coverage.txt -tags=test -parallel=$(PARALLEL_COUNT) ./...
 	@go tool cover -func=coverage.txt
 
 # ============================================================================= #
@@ -96,8 +102,8 @@ check-staticcheck:
 ## run-staticcheck: Run staticcheck if it exists
 .PHONY: run-staticcheck
 run-staticcheck: check-staticcheck
-	@echo 'Running staticcheck...'
-	@staticcheck ./... || echo "Note: staticcheck found issues (exit code: $$?)"
+	@echo 'Running staticcheck with test build tag...'
+	@staticcheck -tags=test ./... || echo "Note: staticcheck found issues (exit code: $$?)"
 
 ## check-golangci-lint: Check if golangci-lint is installed
 .PHONY: check-golangci-lint
@@ -113,15 +119,15 @@ check-golangci-lint:
 ## run-golangci-lint: Run golangci-lint if it exists
 .PHONY: run-golangci-lint
 run-golangci-lint: check-golangci-lint
-	@echo 'Running golangci-lint...'
-	@golangci-lint run ./... || echo "Note: golangci-lint found issues (exit code: $$?)"
+	@echo 'Running golangci-lint with test build tag...'
+	@golangci-lint run --build-tags=test ./... || echo "Note: golangci-lint found issues (exit code: $$?)"
 
 ## lint: Run linters
 .PHONY: lint
 lint:
 	@echo 'Linting...'
-	@echo 'Running go vet...'
-	@go vet ./...
+	@echo 'Running go vet with test build tag...'
+	@go vet -tags=test ./...
 	@$(MAKE) run-golangci-lint || echo "Skipping external linting"
 	@$(MAKE) run-staticcheck || echo "Skipping staticcheck"
 
@@ -133,10 +139,10 @@ audit:
 	go mod verify
 	@echo 'Formatting code...'
 	go fmt ./...
-	@echo 'Running lint...'
+	@echo 'Running lint (with test build tag)...'
 	@$(MAKE) lint
-	@echo 'Running tests with race detection and the "testing" build tag...'
-	go test -race -vet=off -tags=testing ./...
+	@echo 'Running tests with race detection and the "test" build tag using $(PARALLEL_COUNT) parallel tests...'
+	go test -race -vet=off -tags=test -parallel=$(PARALLEL_COUNT) ./...
 
 ## vendor: Tidy and vendor dependencies
 .PHONY: vendor
@@ -171,7 +177,7 @@ build:
 build/optimize:
 	@echo "Building optimized binary..."
 	@mkdir -p $(BUILD_DIR)
-	go build $(LDFLAGS) -ldflags="-s -w" -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
+	go build -ldflags "$(LDVARS) -s -w" -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
 
 ## build/all: Build for all supported platforms
 .PHONY: build/all

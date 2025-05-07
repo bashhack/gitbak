@@ -9,6 +9,7 @@ import (
 
 // TestDefaultInteractor tests the DefaultInteractor implementation
 func TestDefaultInteractor(t *testing.T) {
+	t.Parallel()
 	log := logger.New(true, "", true)
 
 	t.Run("DefaultInteractor constructor", func(t *testing.T) {
@@ -88,6 +89,7 @@ func TestDefaultInteractor(t *testing.T) {
 
 // TestNonInteractiveInteractor tests the NonInteractiveInteractor implementation
 func TestNonInteractiveInteractor(t *testing.T) {
+	t.Parallel()
 	t.Run("NonInteractiveInteractor constructor", func(t *testing.T) {
 		interactor := NewNonInteractiveInteractor()
 

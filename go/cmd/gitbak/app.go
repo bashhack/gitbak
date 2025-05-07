@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,13 +11,12 @@ import (
 
 	"github.com/bashhack/gitbak/internal/common"
 	"github.com/bashhack/gitbak/internal/config"
+	"github.com/bashhack/gitbak/internal/constants"
 	internalErrors "github.com/bashhack/gitbak/internal/errors"
 	"github.com/bashhack/gitbak/internal/git"
 	"github.com/bashhack/gitbak/internal/lock"
 	"github.com/bashhack/gitbak/internal/logger"
 )
-
-// Core interfaces for dependency injection
 
 // Gitbaker performs Git operations
 type Gitbaker interface {
@@ -50,7 +50,7 @@ type AppOptions struct {
 	// System dependencies
 	Exit         func(code int)
 	ExecLookPath func(file string) (string, error)
-	IsRepository func(string) bool
+	IsRepository func(string) (bool, error)
 }
 
 // App is the main gitbak application
@@ -67,7 +67,7 @@ type App struct {
 	// System dependencies
 	exit         func(code int)
 	execLookPath func(file string) (string, error)
-	isRepository func(string) bool
+	isRepository func(string) (bool, error)
 }
 
 // NewDefaultApp creates an App with standard dependencies
@@ -160,8 +160,13 @@ func (a *App) Initialize() error {
 			ShowNoChanges:   a.Config.ShowNoChanges,
 			ContinueSession: a.Config.ContinueSession,
 			NonInteractive:  a.Config.NonInteractive,
+			MaxRetries:      a.Config.MaxRetries,
 		}
-		a.Gitbak = git.NewGitbak(gitbakConfig, a.Logger)
+		gitbak, err := git.NewGitbak(gitbakConfig, a.Logger)
+		if err != nil {
+			return fmt.Errorf("failed to create gitbak instance: %w", err)
+		}
+		a.Gitbak = gitbak
 	}
 
 	return nil
@@ -170,6 +175,11 @@ func (a *App) Initialize() error {
 // Run executes the application with the given context
 // Handles special flags and runs the gitbak process
 func (a *App) Run(ctx context.Context) error {
+	// Ensure the app is fully initialised before doing any work.
+	if err := a.Initialize(); err != nil {
+		return err
+	}
+
 	// Handle special flags first
 	if a.Config.Version {
 		a.ShowVersion()
@@ -181,13 +191,25 @@ func (a *App) Run(ctx context.Context) error {
 		return nil
 	}
 
+	// Ensure we always clean up logger / lock, even on early error paths
+	defer func() {
+		if err := a.Close(); err != nil {
+			_, _ = fmt.Fprintf(a.Stderr, "❌ Error during cleanup: %v\n", err)
+		}
+	}()
+
 	// Verify prerequisites
 	if err := a.checkRequiredCommands(); err != nil {
 		_, _ = fmt.Fprintf(a.Stderr, "❌ Error: %v. Please install it and try again.\n", err)
 		return err
 	}
 
-	if !a.isRepository(a.Config.RepoPath) {
+	isRepo, err := a.isRepository(a.Config.RepoPath)
+	if err != nil {
+		a.Logger.Warning("Failed to check if path is a git repository: %v", err)
+		return internalErrors.Wrap(internalErrors.ErrGitOperationFailed, err.Error())
+	}
+	if !isRepo {
 		return internalErrors.ErrNotGitRepository
 	}
 	a.Logger.Info("Git repository verified")
@@ -201,11 +223,6 @@ func (a *App) Run(ctx context.Context) error {
 		}
 		return internalErrors.Wrap(internalErrors.ErrLockAcquisitionFailure, err.Error())
 	}
-	defer func() {
-		if releaseErr := a.Locker.Release(); releaseErr != nil {
-			a.Logger.Error("Failed to release lock during cleanup: %v", releaseErr)
-		}
-	}()
 
 	// Run main gitbak process
 	return a.Gitbak.Run(ctx)
@@ -221,53 +238,12 @@ func (a *App) ShowVersion() {
 
 // ShowLogo displays ASCII art logo
 func (a *App) ShowLogo() {
-	logo := `@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@%####%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@%#######%%@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@%#*+++=====+++##%@@@@@@@@@@@@@@@@@@%%#+++=+++*+++++*#%@@@@@@@@@@@@@
-@@@@@@@@@@@%*====+#%%%%%*====+#%@@@@@@@@@@@@@@%#+++*#%%%%%%%%%%#*++*%@@@@@@@@@@@
-@@@@@@@@@%*+=====+%%%%%%*======+#%@@@@@@@@@@@#++*%%@@@@@%++@@@@@@%#++#@@@@@@@@@@
-@@@@@@@@%+========+%%%%*=========#%@@@@@@@@@#++%@@@@@@@@%++%@@@@@@@%*+*%@@@@@@@@
-@@@@@@@%*==========+**+===========#%@@@@@@@#++%@@@@@@@@@%++%@@@@@@@@%*=*%@@@@@@@
-@@@@@@@*++###*++===+##*+===++*##+=+%@@@@@@%++#@@@@@@@@@@%++%@@@@@@@@@%*=#@@@@@@@
-@@@@@@@*=+%%%%%%*=*%#*%#++#%%%%%*==++#*++++=*%@@@@@@@@@@#++#@@@@@@@@@@#+#@@@@@@@
-@@@@@@@*=+%%%%%#*=*%#*%#++#%%%%%*=+#%%%####=*%@@@@@@@@@@#+=+%@@@@@@@@@#+#@@@@@@@
-@@@@@@@#+=***++====+**+=====+***+=+%@@@@@@%+=#@@@@@@@@@@@%#*+*%@@@@@@%++#@@@@@@@
-@@@@@@@%*+=========****+=========+#%@@@@@@@#++#@@@@@@@@@@@@@#*+#@@@@%*+*@@@@@@@@
-@@@@@@@@%*========*%%%%#========+#%@@@@@@@@@#=+#@@@@@@@@@@@@@@%%@@@%*+*%@@@@@@@@
-@@@@@@@@@%#+=====+%%@%%%*+====+*%@@@@@@@@@@@%#++*%@@@@@@@@@@@@@@@%#++#%@@@@@@@@@
-@@@@@@@@@@@%*+===+######+===+*%%@@@@@@@@@@@@@@%#*+**#%%%@@%%%%##*++*%@@@@@@@@@@@
-@@@@@@@@@@@@@%##*++=====++*#%@@@@@@@%*+*%@@@@@@@%%#**++++++++++**#%@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@%%%##++*#%#####%##*+*#*+*##%####%%##***+*###%%@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@%#***##****#***+**++***##***##*****#%@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%%%%#**%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@%##%@@@@%%%%%%@@%##%@@@@@@@@@@@@@@@@@@@%##%@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@%%%%%%**#%%%%#++%%%%%%+=#%%%@@@@@@@%%%@@@@%==#@@@@@@@@@@@@@@@@@
-@@@@@@@@@@%#*+++++*%%#+*+#%%#++==+++#%%+=+*++*%%%%#*+++*#%%#==#%#+*#@@@@@@@@@@@@
-@@@@@@@@@%*=+###+=+%%%#+=*%%%#*==###%%%+=+##*++#%#**###+=+%#==*++*#%@@@@@@@@@@@@
-@@@@@@@@@%+=*%%%#=+%%%%+=*%%%%#==#%%%%%+=*%%%*=+%#*+**#+=+%#====+#%@@@@@@@@@@@@@
-@@@@@@@@@%*++*#**++#%#*+=+*#%%#+=*###%%+=+##*++#%*=+###+=+%#==##*+*%@@@@@@@@@@@@
-@@@@@@@@@@%#*****++%%*******%%%%****#%%#*#****%%%%#*******%%**%@%%##%@@@@@@@@@@@
-@@@@@@@@@@%*****++*%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@%####%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@`
-	_, _ = fmt.Fprintln(a.Stdout, logo)
+	_, _ = fmt.Fprintln(a.Stdout, constants.Logo)
 	_, _ = fmt.Fprintln(a.Stdout, "")
 
-	tagline := "Automatic Commit Safety Net for Pair Programming"
 	asciiArtWidth := 80
-	padding := (asciiArtWidth - len(tagline)) / 2
-	centeredTagline := fmt.Sprintf("%s%s", strings.Repeat(" ", padding), tagline)
+	padding := (asciiArtWidth - len(constants.Tagline)) / 2
+	centeredTagline := fmt.Sprintf("%s%s", strings.Repeat(" ", padding), constants.Tagline)
 	_, _ = fmt.Fprintln(a.Stdout, centeredTagline)
 }
 
@@ -280,8 +256,11 @@ func (a *App) checkRequiredCommands() error {
 	return nil
 }
 
-// CleanupOnSignal releases locks and shows summary on interruption
-func (a *App) CleanupOnSignal() {
+// Close releases resources held by the App
+func (a *App) Close() error {
+	var errs []error
+
+	// Release lock if it exists
 	if a.Locker != nil {
 		if err := a.Locker.Release(); err != nil {
 			if a.Logger != nil {
@@ -289,10 +268,34 @@ func (a *App) CleanupOnSignal() {
 			} else {
 				_, _ = fmt.Fprintf(a.Stderr, "❌ Failed to release lock during cleanup: %v\n", err)
 			}
+			errs = append(errs, err)
 		}
 	}
 
-	if a.Gitbak != nil {
+	if a.Logger != nil {
+		if l, ok := a.Logger.(*logger.Logger); ok && l != nil {
+			if err := l.Close(); err != nil {
+				_, _ = fmt.Fprintf(a.Stderr, "❌ Failed to close logger: %v\n", err)
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// CleanupOnSignal releases locks and shows summary on interruption
+func (a *App) CleanupOnSignal() {
+	// Close resources...
+	if err := a.Close(); err != nil {
+		_, _ = fmt.Fprintf(a.Stderr, "❌ Error during cleanup: %v\n", err)
+	}
+
+	// Show summary only if we're not running in --logo or --version mode
+	if !a.Config.ShowLogo && !a.Config.Version && a.Gitbak != nil {
 		a.Gitbak.PrintSummary()
 	}
 }

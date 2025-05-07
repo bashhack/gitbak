@@ -16,11 +16,11 @@ func checkEnvErr(t *testing.T, err error) {
 }
 
 func TestNewConfig(t *testing.T) {
+	t.Parallel()
 	c := New()
 
-	// Verify default values
 	if c.IntervalMinutes != DefaultIntervalMinutes {
-		t.Errorf("Expected IntervalMinutes=%d, got %d", DefaultIntervalMinutes, c.IntervalMinutes)
+		t.Errorf("Expected IntervalMinutes=%.1f, got %.1f", DefaultIntervalMinutes, c.IntervalMinutes)
 	}
 	if c.CommitPrefix != DefaultCommitPrefix {
 		t.Errorf("Expected CommitPrefix=%s, got %s", DefaultCommitPrefix, c.CommitPrefix)
@@ -70,9 +70,8 @@ func TestLoadFromEnvironment(t *testing.T) {
 	c := New()
 	c.LoadFromEnvironment()
 
-	// Verify values from environment
 	if c.IntervalMinutes != 10 {
-		t.Errorf("Expected IntervalMinutes=10, got %d", c.IntervalMinutes)
+		t.Errorf("Expected IntervalMinutes=10, got %.1f", c.IntervalMinutes)
 	}
 	if c.BranchName != "test-branch" {
 		t.Errorf("Expected BranchName=test-branch, got %s", c.BranchName)
@@ -104,6 +103,7 @@ func TestLoadFromEnvironment(t *testing.T) {
 }
 
 func TestSetupFlags(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.BranchName = "env-branch" // Set a value to check override
 
@@ -122,7 +122,7 @@ func TestSetupFlags(t *testing.T) {
 	}
 
 	if c.IntervalMinutes != 15 {
-		t.Errorf("Expected IntervalMinutes=15, got %d", c.IntervalMinutes)
+		t.Errorf("Expected IntervalMinutes=15, got %.1f", c.IntervalMinutes)
 	}
 	if c.BranchName != "flag-branch" {
 		t.Errorf("Expected BranchName=flag-branch, got %s", c.BranchName)
@@ -150,7 +150,7 @@ func TestParseFlags(t *testing.T) {
 		}
 
 		if c.IntervalMinutes != 30 {
-			t.Errorf("Expected IntervalMinutes=30, got %d", c.IntervalMinutes)
+			t.Errorf("Expected IntervalMinutes=30, got %.1f", c.IntervalMinutes)
 		}
 		if c.BranchName != "test-branch" {
 			t.Errorf("Expected BranchName=test-branch, got %s", c.BranchName)
@@ -229,7 +229,6 @@ func TestParseFlags(t *testing.T) {
 		}
 	})
 
-	// Test error case separately for an invalid interval
 	t.Run("Invalid interval", func(t *testing.T) {
 		invalidArgs := []string{"gitbak", "-interval", "invalid"}
 
@@ -246,6 +245,7 @@ func TestParseFlags(t *testing.T) {
 }
 
 func TestFinalize(t *testing.T) {
+	t.Parallel()
 	c := New()
 	c.IntervalMinutes = 0 // Invalid value
 

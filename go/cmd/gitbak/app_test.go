@@ -47,6 +47,7 @@ func TestNewDefaultApp(t *testing.T) {
 	}
 
 	app := NewDefaultApp(versionInfo)
+	app.exit = func(int) {}
 
 	if app.Config.VersionInfo.Version != "test" {
 		t.Errorf("Expected Version=test, got %s", app.Config.VersionInfo.Version)
@@ -354,6 +355,7 @@ func TestAppInitialize(t *testing.T) {
 	}()
 
 	app := NewDefaultApp(config.VersionInfo{})
+	app.exit = func(int) {}
 	app.Config.RepoPath = tmpDir
 	app.Config.LogFile = ""
 

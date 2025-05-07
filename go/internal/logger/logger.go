@@ -16,6 +16,7 @@ type Logger struct {
 	verbose bool
 	stdout  io.Writer
 	stderr  io.Writer
+	file    *os.File // Store file handle for closing
 }
 
 // New creates a new Logger instance
@@ -31,6 +32,8 @@ func NewWithOutput(enabled bool, logFile string, verbose bool, stdout, stderr io
 		Level: slog.LevelInfo,
 	}
 
+	var file *os.File
+
 	if enabled {
 		logDir := filepath.Dir(logFile)
 		if logDir != "." {
@@ -42,6 +45,7 @@ func NewWithOutput(enabled bool, logFile string, verbose bool, stdout, stderr io
 
 		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err == nil {
+			file = f
 			fileHandler := slog.NewTextHandler(f, opts)
 			logger = slog.New(fileHandler)
 			_, _ = fmt.Fprintf(stdout, "🔍 Debug logging enabled. Logs will be written to: %s\n", logFile)
@@ -64,6 +68,7 @@ func NewWithOutput(enabled bool, logFile string, verbose bool, stdout, stderr io
 		verbose: verbose,
 		stdout:  stdout,
 		stderr:  stderr,
+		file:    file,
 	}
 }
 
@@ -101,14 +106,14 @@ func (l *Logger) Success(format string, args ...interface{}) {
 
 // Warning logs a warning message
 func (l *Logger) Warning(format string, args ...interface{}) {
-	if !l.enabled {
-		return
+	msg := fmt.Sprintf(format, args...)
+
+	if l.enabled {
+		l.logger.Warn(msg)
 	}
 
-	msg := fmt.Sprintf(format, args...)
-	l.logger.Warn(msg)
-
-	// Also print to console if verbose is enabled
+	// Always show the message to the user when verbose is on,
+	// regardless of whether file logging is enabled
 	if l.verbose {
 		_, _ = fmt.Fprintf(l.stdout, "⚠️  %s\n", msg)
 	}
@@ -127,13 +132,13 @@ func (l *Logger) WarningToUser(format string, args ...interface{}) {
 
 // Error logs an error message
 func (l *Logger) Error(format string, args ...interface{}) {
-	if !l.enabled {
-		return
+	msg := fmt.Sprintf(format, args...)
+
+	if l.enabled {
+		l.logger.Error(msg)
 	}
 
-	msg := fmt.Sprintf(format, args...)
-	l.logger.Error(msg)
-
+	// Always show errors to the user regardless of debug status
 	_, _ = fmt.Fprintf(l.stderr, "❌ %s\n", msg)
 }
 
@@ -141,4 +146,16 @@ func (l *Logger) Error(format string, args ...interface{}) {
 func (l *Logger) StatusMessage(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	_, _ = fmt.Fprintln(l.stdout, msg)
+}
+
+// Close ensures any buffered data is written and closes open log file handles
+func (l *Logger) Close() error {
+	if l.file != nil {
+		// Sync ensures any buffered data is flushed to disk before closing
+		if err := l.file.Sync(); err != nil {
+			return err
+		}
+		return l.file.Close()
+	}
+	return nil
 }

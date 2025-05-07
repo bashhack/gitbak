@@ -8,9 +8,11 @@ import (
 
 // TestNewGitbak tests the NewGitbak function to ensure it correctly sets up dependencies
 func TestNewGitbak(t *testing.T) {
+	t.Parallel()
 	log := logger.New(true, "", true)
 
 	t.Run("NewGitbak with NonInteractive=true", func(t *testing.T) {
+		t.Parallel()
 		config := GitbakConfig{
 			RepoPath:        "/test/repo",
 			IntervalMinutes: 5,
@@ -23,7 +25,10 @@ func TestNewGitbak(t *testing.T) {
 			NonInteractive:  true,
 		}
 
-		gb := NewGitbak(config, log)
+		gb, err := NewGitbak(config, log)
+		if err != nil {
+			t.Fatalf("NewGitbak returned unexpected error: %v", err)
+		}
 
 		if gb == nil {
 			t.Fatal("NewGitbak returned nil")
@@ -49,6 +54,7 @@ func TestNewGitbak(t *testing.T) {
 	})
 
 	t.Run("NewGitbak with NonInteractive=false", func(t *testing.T) {
+		t.Parallel()
 		config := GitbakConfig{
 			RepoPath:        "/test/repo",
 			IntervalMinutes: 5,
@@ -61,7 +67,10 @@ func TestNewGitbak(t *testing.T) {
 			NonInteractive:  false,
 		}
 
-		gb := NewGitbak(config, log)
+		gb, err := NewGitbak(config, log)
+		if err != nil {
+			t.Fatalf("NewGitbak returned unexpected error: %v", err)
+		}
 
 		if gb == nil {
 			t.Fatal("NewGitbak returned nil")

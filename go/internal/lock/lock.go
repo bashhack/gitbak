@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,6 +23,13 @@ type Locker struct {
 
 // New creates a Locker for the specified repository path
 func New(repoPath string) (*Locker, error) {
+	if runtime.GOOS == "windows" {
+		return nil, errors.NewLockError("", 0,
+			errors.Wrap(errors.ErrLockAcquisitionFailure,
+				"gitbak currently only supports Unix-like operating systems (Linux, macOS, BSD). "+
+					"Windows support is not available at this time."))
+	}
+
 	repoHash := fmt.Sprintf("%x", sha256.Sum256([]byte(repoPath)))[:16]
 	lockFile := filepath.Join(os.TempDir(), fmt.Sprintf("gitbak-%s.lock", repoHash))
 
@@ -34,11 +42,16 @@ func New(repoPath string) (*Locker, error) {
 
 // Acquire tries to acquire the lock
 func (l *Locker) Acquire() error {
-	if err := l.tryCreateLock(); err == nil {
+	err := l.tryCreateLock()
+	if err == nil {
 		return nil
+	} else if os.IsExist(err) {
+		// Only try to acquire an existing lock if the error is specifically about the file already existing
+		return l.tryAcquireExistingLock()
 	}
 
-	return l.tryAcquireExistingLock()
+	// For other errors, return immediately without trying to acquire an existing lock
+	return err
 }
 
 // tryCreateLock attempts to create and lock a new lock file
@@ -48,14 +61,18 @@ func (l *Locker) tryCreateLock() error {
 	// O_EXCL with O_CREATE ensures the file is created atomically
 	l.lockFd, err = os.OpenFile(l.lockFile, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0666)
 	if err != nil {
+		// Pass through the original error so os.IsExist() can detect it
+		if os.IsExist(err) {
+			return err
+		}
 		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(errors.ErrLockAcquisitionFailure, "failed to create lock file"))
+			errors.Wrap(err, "failed to create lock file"))
 	}
 
 	if err = l.acquireFlock(); err != nil {
 		l.closeFileDescriptor()
 		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(errors.ErrLockAcquisitionFailure, "failed to acquire lock on newly created lock file"))
+			errors.Wrap(err, "failed to acquire lock on newly created lock file"))
 	}
 
 	if err = l.writePidToLockFile(); err != nil {
@@ -77,18 +94,25 @@ func (l *Locker) tryAcquireExistingLock() error {
 	l.lockFd, err = os.OpenFile(l.lockFile, os.O_RDWR, 0666)
 	if err != nil {
 		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(errors.ErrLockAcquisitionFailure, "failed to open existing lock file"))
+			errors.Wrap(err, "failed to open existing lock file"))
 	}
 
 	if err = l.acquireFlock(); err != nil {
 		l.closeFileDescriptor()
 
-		if errors.Is(err, syscall.EWOULDBLOCK) {
+		// Hedging bets here and checking either EWOULDBLOCK or EAGAIN,
+		// Per GNU docs ...
+		//     Portability Note: In many older Unix systems ...
+		//     [EWOULDBLOCK was] a distinct error code different from EAGAIN.
+		//     To make your program portable, you should check for both codes
+		//     and treat them the same.
+		// Ref: https://www.gnu.org/savannah-checkouts/gnu/libc/manual/html_node/Error-Codes.html
+		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
 			return l.handleBlockedLock()
 		}
 
 		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(errors.ErrLockAcquisitionFailure, "failed to acquire lock"))
+			errors.Wrap(err, "failed to acquire lock"))
 	}
 
 	if err = l.resetAndWritePid(); err != nil {
@@ -170,7 +194,7 @@ func (l *Locker) handleStaleLock(otherPid int) error {
 
 	if err := os.Remove(l.lockFile); err != nil {
 		return errors.NewLockError(l.lockFile, otherPid,
-			errors.Wrapf(fmt.Errorf("permission denied"), "found stale lock file from PID %d, but failed to remove it", otherPid))
+			errors.Wrap(err, fmt.Sprintf("found stale lock file from PID %d, but failed to remove it", otherPid)))
 	}
 
 	var err error
@@ -178,16 +202,16 @@ func (l *Locker) handleStaleLock(otherPid int) error {
 	if err != nil {
 		if os.IsExist(err) {
 			return errors.NewLockError(l.lockFile, 0,
-				errors.Wrap(errors.ErrLockAcquisitionFailure, "another gitbak instance took the lock immediately after we removed the stale lock"))
+				errors.Wrap(err, "another gitbak instance took the lock immediately after we removed the stale lock"))
 		}
 		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(errors.ErrLockAcquisitionFailure, "failed to open lock file after removing stale lock"))
+			errors.Wrap(err, "failed to open lock file after removing stale lock"))
 	}
 
 	if err = l.acquireFlock(); err != nil {
 		l.closeFileDescriptor()
 		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(errors.ErrLockAcquisitionFailure, "failed to acquire lock even after removing stale lock"))
+			errors.Wrap(err, "failed to acquire lock even after removing stale lock"))
 	}
 
 	if err = l.writePidToLockFile(); err != nil {
@@ -229,21 +253,21 @@ func (l *Locker) Release() error {
 
 	if flockErr := syscall.Flock(int(l.lockFd.Fd()), syscall.LOCK_UN); flockErr != nil {
 		err = errors.NewLockError(l.lockFile, l.pid,
-			errors.Wrap(errors.ErrLockAcquisitionFailure, "failed to release lock"))
+			errors.Wrap(err, "failed to release lock"))
 	}
 
 	if closeErr := l.lockFd.Close(); closeErr != nil && err == nil {
 		err = errors.NewLockError(l.lockFile, l.pid,
-			errors.Wrap(errors.ErrLockAcquisitionFailure, "failed to close lock file"))
+			errors.Wrap(err, "failed to close lock file"))
 	}
 
 	l.lockFd = nil
 	l.acquired = false
 
-	// Note: We don't remove the lock file as another process might need the PID
+	// Remove the lock file to clean up and prevent false stale lock detection on next run
 	if removeErr := os.Remove(l.lockFile); removeErr != nil && !os.IsNotExist(removeErr) && err == nil {
 		err = errors.NewLockError(l.lockFile, l.pid,
-			errors.Wrap(errors.ErrLockAcquisitionFailure, "failed to remove lock file"))
+			errors.Wrap(err, "failed to remove lock file"))
 	}
 
 	return err

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,115 +18,84 @@ import (
 func setupTestRepo(t *testing.T) string {
 	t.Helper()
 
-	tempDir, err := os.MkdirTemp("", "gitbak-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
+	tempDir := t.TempDir()
 
 	cmd := exec.Command("git", "init", tempDir)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
-		if cleanErr := os.RemoveAll(tempDir); cleanErr != nil {
-			t.Logf("Failed to clean up temp directory: %v", cleanErr)
-		}
 		t.Fatalf("Failed to initialize git repo: %v", err)
 	}
 
 	cmd = exec.Command("git", "-C", tempDir, "config", "user.email", "test@example.com")
 	err = cmd.Run()
 	if err != nil {
-		if cleanErr := os.RemoveAll(tempDir); cleanErr != nil {
-			t.Logf("Failed to clean up temp directory: %v", cleanErr)
-		}
 		t.Fatalf("Failed to configure git user email: %v", err)
 	}
 
 	cmd = exec.Command("git", "-C", tempDir, "config", "user.name", "Test User")
 	err = cmd.Run()
 	if err != nil {
-		if cleanErr := os.RemoveAll(tempDir); cleanErr != nil {
-			t.Logf("Failed to clean up temp directory: %v", cleanErr)
-		}
 		t.Fatalf("Failed to configure git user name: %v", err)
 	}
 
 	initialFile := filepath.Join(tempDir, "initial.txt")
 	err = os.WriteFile(initialFile, []byte("Initial content"), 0644)
 	if err != nil {
-		if cleanErr := os.RemoveAll(tempDir); cleanErr != nil {
-			t.Logf("Failed to clean up temp directory: %v", cleanErr)
-		}
 		t.Fatalf("Failed to create initial file: %v", err)
 	}
 
 	cmd = exec.Command("git", "-C", tempDir, "add", "initial.txt")
 	err = cmd.Run()
 	if err != nil {
-		if cleanErr := os.RemoveAll(tempDir); cleanErr != nil {
-			t.Logf("Failed to clean up temp directory: %v", cleanErr)
-		}
 		t.Fatalf("Failed to add initial file: %v", err)
 	}
 
 	cmd = exec.Command("git", "-C", tempDir, "commit", "-m", "Initial commit")
 	err = cmd.Run()
 	if err != nil {
-		if cleanErr := os.RemoveAll(tempDir); cleanErr != nil {
-			t.Logf("Failed to clean up temp directory: %v", cleanErr)
-		}
 		t.Fatalf("Failed to create initial commit: %v", err)
 	}
 
 	return tempDir
 }
 
-// cleanupTestRepo cleans up test resources
-func cleanupTestRepo(t *testing.T, path string) {
-	if err := os.RemoveAll(path); err != nil {
-		t.Logf("Failed to remove test repository directory: %v", err)
-	}
-}
-
 func TestIsRepository(t *testing.T) {
 	repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, repoPath)
 
-	if !IsRepository(repoPath) {
+	isRepo, err := IsRepository(repoPath)
+	if err != nil {
+		t.Fatalf("IsRepository returned unexpected error: %v", err)
+	}
+	if !isRepo {
 		t.Errorf("Expected %s to be recognized as a git repository", repoPath)
 	}
 
-	tempDir, err := os.MkdirTemp("", "gitbak-not-repo-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("Failed to remove temporary directory: %v", err)
-		}
-	}()
+	tempDir := t.TempDir()
 
-	if IsRepository(tempDir) {
+	isRepo, err = IsRepository(tempDir)
+	// For a non-git repo, we expect isRepo to be false and err to be nil
+	if err != nil {
+		t.Fatalf("IsRepository returned unexpected error for non-repo: %v", err)
+	}
+	if isRepo {
 		t.Errorf("Expected %s to not be recognized as a git repository", tempDir)
 	}
 }
 
 func TestGitbakNewAndBasicMethods(t *testing.T) {
+	ctx := context.Background()
 	repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, repoPath)
 
 	// Place the log file outside the repo directory to avoid affecting git status
-	tempLogDir, err := os.MkdirTemp("", "gitbak-logs-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir for logs: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempLogDir); err != nil {
-			t.Logf("Failed to remove temporary log directory: %v", err)
-		}
-	}()
+	tempLogDir := t.TempDir()
 
 	tempLogFile := filepath.Join(tempLogDir, "gitbak-test.log")
 	log := logger.New(true, tempLogFile, true)
+	defer func() {
+		if err := log.Close(); err != nil {
+			t.Logf("Failed to close log: %v", err)
+		}
+	}()
 
 	gb := setupTestGitbak(
 		GitbakConfig{
@@ -142,7 +112,7 @@ func TestGitbakNewAndBasicMethods(t *testing.T) {
 		log,
 	)
 
-	branch, err := gb.getCurrentBranch()
+	branch, err := gb.getCurrentBranch(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get current branch: %v", err)
 	}
@@ -151,7 +121,7 @@ func TestGitbakNewAndBasicMethods(t *testing.T) {
 		t.Errorf("Expected branch to be main or master, got %s", branch)
 	}
 
-	exists, err := gb.branchExists(branch)
+	exists, err := gb.branchExists(ctx, branch)
 	if err != nil {
 		t.Fatalf("Failed to check if current branch exists: %v", err)
 	}
@@ -159,7 +129,7 @@ func TestGitbakNewAndBasicMethods(t *testing.T) {
 		t.Errorf("Current branch %s should exist but branchExists returned false", branch)
 	}
 
-	exists, err = gb.branchExists("non-existent-branch-name-12345")
+	exists, err = gb.branchExists(ctx, "non-existent-branch-name-12345")
 	if err != nil {
 		t.Fatalf("Failed to check if non-existent branch exists: %v", err)
 	}
@@ -173,7 +143,7 @@ func TestGitbakNewAndBasicMethods(t *testing.T) {
 		t.Fatalf("Failed to create test branch: %v", err)
 	}
 
-	exists, err = gb.branchExists("test-new-branch")
+	exists, err = gb.branchExists(ctx, "test-new-branch")
 	if err != nil {
 		t.Fatalf("Failed to check if test branch exists: %v", err)
 	}
@@ -181,17 +151,17 @@ func TestGitbakNewAndBasicMethods(t *testing.T) {
 		t.Errorf("Test branch 'test-new-branch' should exist but branchExists returned false")
 	}
 
-	hasChanges, err := gb.hasUncommittedChanges()
+	hasChanges, err := gb.hasUncommittedChanges(ctx)
 	if err != nil {
 		t.Fatalf("Failed to check for uncommitted changes: %v", err)
 	}
 
 	if hasChanges {
-		statusOutput, statusErr := gb.runGitCommandWithOutput("status", "--porcelain")
+		statusOutput, statusErr := gb.runGitCommandWithOutput(ctx, "status", "--porcelain")
 		if statusErr != nil {
-			t.Logf("Failed to get git status: %v", statusErr)
+			t.Fatalf("git status failed unexpectedly: %v", statusErr)
 		} else {
-			t.Logf("Git status shows uncommitted changes: %q", statusOutput)
+			t.Logf("git status reported uncommitted changes: %q", statusOutput)
 		}
 		t.Error("Expected no uncommitted changes in fresh repo")
 	}
@@ -202,7 +172,7 @@ func TestGitbakNewAndBasicMethods(t *testing.T) {
 		t.Fatalf("Failed to create new file: %v", err)
 	}
 
-	hasChanges, err = gb.hasUncommittedChanges()
+	hasChanges, err = gb.hasUncommittedChanges(ctx)
 	if err != nil {
 		t.Fatalf("Failed to check for uncommitted changes: %v", err)
 	}
@@ -213,8 +183,8 @@ func TestGitbakNewAndBasicMethods(t *testing.T) {
 }
 
 func TestFindHighestCommitNumber(t *testing.T) {
+	ctx := context.Background()
 	repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, repoPath)
 
 	prefix := "[gitbak] Automatic checkpoint"
 
@@ -240,18 +210,15 @@ func TestFindHighestCommitNumber(t *testing.T) {
 	}
 
 	// Place the log file outside the repo directory to avoid affecting git status
-	tempLogDir, err := os.MkdirTemp("", "gitbak-logs-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir for logs: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempLogDir); err != nil {
-			t.Logf("Failed to remove temporary log directory: %v", err)
-		}
-	}()
+	tempLogDir := t.TempDir()
 
 	tempLogFile := filepath.Join(tempLogDir, "gitbak-test.log")
 	log := logger.New(true, tempLogFile, true)
+	defer func() {
+		if err := log.Close(); err != nil {
+			t.Logf("Failed to close log: %v", err)
+		}
+	}()
 
 	gb := setupTestGitbak(
 		GitbakConfig{
@@ -268,7 +235,7 @@ func TestFindHighestCommitNumber(t *testing.T) {
 		log,
 	)
 
-	highest, err := gb.findHighestCommitNumber()
+	highest, err := gb.findHighestCommitNumber(ctx)
 	if err != nil {
 		t.Fatalf("Failed to find highest commit number: %v", err)
 	}
@@ -278,158 +245,22 @@ func TestFindHighestCommitNumber(t *testing.T) {
 	}
 }
 
-// runSingleIteration runs a single iteration of the gitbak process
-// This is a trimmed-down version of the Run method that doesn't loop forever
-func runSingleIteration(g *Gitbak) error {
-	var err error
-
-	g.originalBranch, err = g.getCurrentBranch()
-	if err != nil {
-		g.logger.Error("Failed to get current branch: %v", err)
-		return fmt.Errorf("failed to get current branch: %w", err)
-	}
-	g.logger.Info("Starting gitbak on branch: %s", g.originalBranch)
-
-	commitCounter := 1
-
-	if g.config.ContinueSession {
-		g.config.CreateBranch = false
-		fmt.Printf("🔄 Continuing gitbak session on branch: %s\n", g.originalBranch)
-
-		highestNum, err := g.findHighestCommitNumber()
-		if err != nil {
-			g.logger.Warning("Failed to find highest commit number: %v", err)
-			fmt.Println("ℹ️  No previous commits found with prefix '" + g.config.CommitPrefix + "' - starting from commit #1")
-		} else if highestNum > 0 {
-			commitCounter = highestNum + 1
-			fmt.Printf("ℹ️  Found previous commits - starting from commit #%d\n", commitCounter)
-		} else {
-			fmt.Println("ℹ️  No previous commits found with prefix '" + g.config.CommitPrefix + "' - starting from commit #1")
-		}
-	} else if g.config.CreateBranch {
-		hasChanges, err := g.hasUncommittedChanges()
-		if err != nil {
-			return fmt.Errorf("failed to check for uncommitted changes: %w", err)
-		}
-
-		if hasChanges {
-			fmt.Println("⚠️  Warning: You have uncommitted changes.")
-
-			// Use our promptForCommit method, which respects NonInteractive mode
-			shouldCommit := g.promptForCommit()
-
-			if shouldCommit {
-				err = g.runGitCommand("add", ".")
-				if err != nil {
-					return fmt.Errorf("failed to stage changes: %w", err)
-				}
-
-				err = g.runGitCommand("commit", "-m", "Manual commit before starting gitbak session")
-				if err != nil {
-					return fmt.Errorf("failed to create initial commit: %w", err)
-				}
-
-				fmt.Println("✅ Created initial commit")
-			}
-		}
-
-		branchExists, err := g.branchExists(g.config.BranchName)
-		if err != nil {
-			return fmt.Errorf("failed to check if branch exists: %w", err)
-		}
-
-		if branchExists {
-			fmt.Printf("⚠️  Warning: Branch '%s' already exists.\n", g.config.BranchName)
-
-			// Default to true in tests since we'd just get stuck otherwise
-			// In real usage, this would use promptYesNo which respects NonInteractive mode
-			if g.config.NonInteractive {
-				g.logger.Info("Non-interactive mode: automatically using a different branch name")
-			}
-
-			g.config.BranchName = fmt.Sprintf("%s-%s", g.config.BranchName, time.Now().Format("150405"))
-			fmt.Printf("🌿 Using new branch name: %s\n", g.config.BranchName)
-		}
-
-		err = g.runGitCommand("checkout", "-b", g.config.BranchName)
-		if err != nil {
-			return fmt.Errorf("failed to create new branch: %w", err)
-		}
-
-		fmt.Printf("🌿 Created and switched to new branch: %s\n", g.config.BranchName)
-	} else {
-		currentBranch, err := g.getCurrentBranch()
-		if err != nil {
-			return fmt.Errorf("failed to get current branch: %w", err)
-		}
-		fmt.Printf("🌿 Using current branch: %s\n", currentBranch)
-	}
-
-	fmt.Printf("🔄 gitbak started at %s\n", time.Now().Format("2006-01-02 15:04:05"))
-	fmt.Printf("📂 Repository: %s\n", g.config.RepoPath)
-	fmt.Printf("⏱️  Interval: %d minutes\n", g.config.IntervalMinutes)
-	fmt.Printf("📝 Commit prefix: %s\n", g.config.CommitPrefix)
-	fmt.Printf("🔊 Verbose mode: %t\n", g.config.Verbose)
-	fmt.Printf("🔔 Show no-changes messages: %t\n", g.config.ShowNoChanges)
-	fmt.Println("❓ Press Ctrl+C to stop and view session summary")
-
-	hasChanges, err := g.hasUncommittedChanges()
-	if err != nil {
-		g.logger.Error("Failed to check git status: %v", err)
-		fmt.Printf("❌ Error: Failed to check git status: %v\n", err)
-		return err
-	}
-
-	if hasChanges {
-		timestamp := time.Now().Format("2006-01-02 15:04:05")
-
-		err = g.runGitCommand("add", ".")
-		if err != nil {
-			g.logger.Warning("Failed to stage changes: %v", err)
-			fmt.Printf("⚠️  Warning: Failed to stage changes: %v\n", err)
-			return err
-		}
-
-		commitMsg := fmt.Sprintf("%s #%d - %s", g.config.CommitPrefix, commitCounter, timestamp)
-		err = g.runGitCommand("commit", "-m", commitMsg)
-		if err != nil {
-			g.logger.Warning("Failed to create commit: %v", err)
-			fmt.Printf("⚠️  Warning: Failed to create commit: %v\n", err)
-			return err
-		}
-
-		fmt.Printf("✅ Commit #%d created at %s\n", commitCounter, timestamp)
-		g.logger.Info("Successfully created commit #%d", commitCounter)
-		g.commitsCount++
-	} else if g.config.ShowNoChanges && g.config.Verbose {
-		fmt.Printf("ℹ️  No changes to commit at %s\n", time.Now().Format("15:04:05"))
-		g.logger.Info("No changes to commit detected")
-	}
-
-	return nil
-}
-
-// TestRunDirectly attempts to test parts of the Run method by injecting a channel and goroutine
+// TestRunDirectly tests the logic of the Run method using the exported RunSingleIteration function
 func TestRunDirectly(t *testing.T) {
 	repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, repoPath)
 
-	tempLogDir, err := os.MkdirTemp("", "gitbak-logs-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir for logs: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempLogDir); err != nil {
-			t.Logf("Failed to remove temporary log directory: %v", err)
-		}
-	}()
+	tempLogDir := t.TempDir()
 
 	tempLogFile := filepath.Join(tempLogDir, "gitbak-test-direct.log")
 	log := logger.New(true, tempLogFile, true)
+	defer func() {
+		if err := log.Close(); err != nil {
+			t.Logf("Failed to close log: %v", err)
+		}
+	}()
 
 	testFile := filepath.Join(repoPath, "test-run-direct.txt")
-	err = os.WriteFile(testFile, []byte("Test content for Run method direct"), 0644)
-	if err != nil {
+	if err := os.WriteFile(testFile, []byte("Test content for Run method direct"), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -448,12 +279,12 @@ func TestRunDirectly(t *testing.T) {
 		log,
 	)
 
-	err = runSingleIteration(gb)
-	if err != nil {
-		t.Fatalf("runSingleIteration failed: %v", err)
+	ctx := context.Background()
+	if err := gb.RunSingleIteration(ctx); err != nil {
+		t.Fatalf("RunSingleIteration failed: %v", err)
 	}
 
-	currentBranch, err := gb.getCurrentBranch()
+	currentBranch, err := gb.getCurrentBranch(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get current branch: %v", err)
 	}
@@ -462,7 +293,7 @@ func TestRunDirectly(t *testing.T) {
 		t.Errorf("Expected to be on branch 'gitbak-direct-branch', but got '%s'", currentBranch)
 	}
 
-	commitOutput, err := gb.runGitCommandWithOutput("log", "--grep", regexp.QuoteMeta("[gitbak-direct]"), "--oneline")
+	commitOutput, err := gb.runGitCommandWithOutput(ctx, "log", "--grep", regexp.QuoteMeta("[gitbak-direct]"), "--oneline")
 	if err != nil {
 		t.Fatalf("Failed to get commit log: %v", err)
 	}
@@ -474,23 +305,19 @@ func TestRunDirectly(t *testing.T) {
 
 // TestRunBasic tests the Run method functionality
 func TestRunBasic(t *testing.T) {
-	repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, repoPath)
-
-	tempLogDir, err := os.MkdirTemp("", "gitbak-logs-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir for logs: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempLogDir); err != nil {
-			t.Logf("Failed to remove temporary log directory: %v", err)
-		}
-	}()
-
-	tempLogFile := filepath.Join(tempLogDir, "gitbak-test.log")
-	log := logger.New(true, tempLogFile, true)
-
 	t.Run("Non-interactive mode with branch creation", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+
+		tempLogDir := t.TempDir()
+		tempLogFile := filepath.Join(tempLogDir, "gitbak-test-branch.log")
+		log := logger.New(true, tempLogFile, true)
+		defer func() {
+			if err := log.Close(); err != nil {
+				t.Logf("Failed to close log: %v", err)
+			}
+		}()
+
 		testFile := filepath.Join(repoPath, "test-run.txt")
 		err := os.WriteFile(testFile, []byte("Test content for Run method"), 0644)
 		if err != nil {
@@ -512,12 +339,13 @@ func TestRunBasic(t *testing.T) {
 			log,
 		)
 
-		err = runSingleIteration(gb)
+		ctx := context.Background()
+		err = gb.RunSingleIteration(ctx)
 		if err != nil {
-			t.Fatalf("runSingleIteration failed: %v", err)
+			t.Fatalf("RunSingleIteration failed: %v", err)
 		}
 
-		exists, err := gb.branchExists("gitbak-test-branch")
+		exists, err := gb.branchExists(ctx, "gitbak-test-branch")
 		if err != nil {
 			t.Fatalf("Failed to check if branch exists: %v", err)
 		}
@@ -526,7 +354,7 @@ func TestRunBasic(t *testing.T) {
 		}
 
 		grepPattern := regexp.QuoteMeta("[gitbak-test]")
-		commitOutput, err := gb.runGitCommandWithOutput("log", "--grep", grepPattern, "--oneline")
+		commitOutput, err := gb.runGitCommandWithOutput(ctx, "log", "--grep", grepPattern, "--oneline")
 		if err != nil {
 			t.Fatalf("Failed to get commit log: %v", err)
 		}
@@ -541,6 +369,18 @@ func TestRunBasic(t *testing.T) {
 	})
 
 	t.Run("Continue session mode", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+
+		tempLogDir := t.TempDir()
+		tempLogFile := filepath.Join(tempLogDir, "gitbak-test-continue.log")
+		log := logger.New(true, tempLogFile, true)
+		defer func() {
+			if err := log.Close(); err != nil {
+				t.Logf("Failed to close log: %v", err)
+			}
+		}()
+
 		setupBranch := "gitbak-continue-branch"
 		commitPrefix := "[gitbak-continue] Commit"
 
@@ -590,13 +430,14 @@ func TestRunBasic(t *testing.T) {
 			log,
 		)
 
-		err = runSingleIteration(gb)
+		ctx := context.Background()
+		err = gb.RunSingleIteration(ctx)
 		if err != nil {
-			t.Fatalf("runSingleIteration failed in continue mode: %v", err)
+			t.Fatalf("RunSingleIteration failed in continue mode: %v", err)
 		}
 
 		grepPattern := regexp.QuoteMeta(commitPrefix)
-		commitOutput, err := gb.runGitCommandWithOutput("log", "--grep", grepPattern, "--oneline")
+		commitOutput, err := gb.runGitCommandWithOutput(ctx, "log", "--grep", grepPattern, "--oneline")
 		if err != nil {
 			t.Fatalf("Failed to get commit log: %v", err)
 		}
@@ -608,13 +449,24 @@ func TestRunBasic(t *testing.T) {
 				commitPrefix, len(commitLines), commitOutput)
 		}
 
-		// Verify that the second commit has #2 in its message
 		if !strings.Contains(commitOutput, "#2") {
 			t.Errorf("Expected to find commit #2, but output was: %s", commitOutput)
 		}
 	})
 
 	t.Run("PrintSummary", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+
+		tempLogDir := t.TempDir()
+		tempLogFile := filepath.Join(tempLogDir, "gitbak-test-summary.log")
+		log := logger.New(true, tempLogFile, true)
+		defer func() {
+			if err := log.Close(); err != nil {
+				t.Logf("Failed to close log: %v", err)
+			}
+		}()
+
 		gb := setupTestGitbak(
 			GitbakConfig{
 				RepoPath:        repoPath,
@@ -642,24 +494,19 @@ func TestRunBasic(t *testing.T) {
 
 // TestSetupCurrentBranchSession tests the setupCurrentBranchSession method
 func TestSetupCurrentBranchSession(t *testing.T) {
-	// Create a test repository
-	repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, repoPath)
-
-	tempLogDir, err := os.MkdirTemp("", "gitbak-logs-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir for logs: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempLogDir); err != nil {
-			t.Logf("Failed to remove temporary log directory: %v", err)
-		}
-	}()
-
-	tempLogFile := filepath.Join(tempLogDir, "gitbak-test-current.log")
-	log := logger.New(true, tempLogFile, true)
-
 	t.Run("setupCurrentBranchSession normal case", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+
+		tempLogDir := t.TempDir()
+		tempLogFile := filepath.Join(tempLogDir, "gitbak-test-current.log")
+		log := logger.New(true, tempLogFile, true)
+		defer func() {
+			if err := log.Close(); err != nil {
+				t.Logf("Failed to close log: %v", err)
+			}
+		}()
+
 		gb := setupTestGitbak(
 			GitbakConfig{
 				RepoPath:        repoPath,
@@ -677,12 +524,23 @@ func TestSetupCurrentBranchSession(t *testing.T) {
 
 		gb.originalBranch = "main"
 
-		gb.setupCurrentBranchSession()
+		sessionCtx := context.Background()
+		gb.setupCurrentBranchSession(sessionCtx)
 		// This method doesn't return anything and has no observable side effects
 		// other than the log message, so just ensuring it doesn't panic
 	})
 
 	t.Run("setupCurrentBranchSession with error getting current branch", func(t *testing.T) {
+		t.Parallel()
+		tempLogDir := t.TempDir()
+		tempLogFile := filepath.Join(tempLogDir, "gitbak-test-current-error.log")
+		log := logger.New(true, tempLogFile, true)
+		defer func() {
+			if err := log.Close(); err != nil {
+				t.Logf("Failed to close log: %v", err)
+			}
+		}()
+
 		// Create a gitbak instance with an invalid repository path,
 		// this will cause getCurrentBranch to fail
 		nonExistentPath := filepath.Join(os.TempDir(), "non-existent-repo")
@@ -702,28 +560,130 @@ func TestSetupCurrentBranchSession(t *testing.T) {
 			log,
 		)
 
-		gb.setupCurrentBranchSession()
+		sessionCtx := context.Background()
+		gb.setupCurrentBranchSession(sessionCtx)
 		// This should handle the error gracefully and not panic
 	})
+}
+
+// TestGitbakConfigValidate tests the GitbakConfig.Validate method
+func TestGitbakConfigValidate(t *testing.T) {
+	tests := map[string]struct {
+		config      GitbakConfig
+		expectError bool
+		errorMsg    string
+	}{
+		"valid config": {
+			config: GitbakConfig{
+				RepoPath:        "/test/repo",
+				IntervalMinutes: 5,
+				BranchName:      "test-branch",
+				CommitPrefix:    "[test] ",
+				MaxRetries:      3,
+			},
+			expectError: false,
+		},
+		"empty repo path": {
+			config: GitbakConfig{
+				RepoPath:        "",
+				IntervalMinutes: 5,
+				BranchName:      "test-branch",
+				CommitPrefix:    "[test] ",
+				MaxRetries:      3,
+			},
+			expectError: true,
+			errorMsg:    "RepoPath must not be empty",
+		},
+		"zero interval minutes": {
+			config: GitbakConfig{
+				RepoPath:        "/test/repo",
+				IntervalMinutes: 0,
+				BranchName:      "test-branch",
+				CommitPrefix:    "[test] ",
+				MaxRetries:      3,
+			},
+			expectError: true,
+			errorMsg:    "IntervalMinutes must be > 0 (got 0.00)",
+		},
+		"negative interval minutes": {
+			config: GitbakConfig{
+				RepoPath:        "/test/repo",
+				IntervalMinutes: -5,
+				BranchName:      "test-branch",
+				CommitPrefix:    "[test] ",
+				MaxRetries:      3,
+			},
+			expectError: true,
+			errorMsg:    "IntervalMinutes must be > 0 (got -5.00)",
+		},
+		"empty branch name": {
+			config: GitbakConfig{
+				RepoPath:        "/test/repo",
+				IntervalMinutes: 5,
+				BranchName:      "",
+				CommitPrefix:    "[test] ",
+				MaxRetries:      3,
+			},
+			expectError: true,
+			errorMsg:    "BranchName must not be empty",
+		},
+		"empty commit prefix": {
+			config: GitbakConfig{
+				RepoPath:        "/test/repo",
+				IntervalMinutes: 5,
+				BranchName:      "test-branch",
+				CommitPrefix:    "",
+				MaxRetries:      3,
+			},
+			expectError: true,
+			errorMsg:    "CommitPrefix must not be empty",
+		},
+		"negative max retries": {
+			config: GitbakConfig{
+				RepoPath:        "/test/repo",
+				IntervalMinutes: 5,
+				BranchName:      "test-branch",
+				CommitPrefix:    "[test] ",
+				MaxRetries:      -1,
+			},
+			expectError: true,
+			errorMsg:    "MaxRetries cannot be negative (got -1)",
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			err := test.config.Validate()
+
+			if test.expectError {
+				if err == nil {
+					t.Errorf("Expected error but got nil")
+				} else if !strings.Contains(err.Error(), test.errorMsg) {
+					t.Errorf("Expected error to contain %q, got %q", test.errorMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+			}
+		})
+	}
 }
 
 // TestNonInteractivePromptYesNo tests the promptYesNo method in non-interactive mode
 func TestNonInteractivePromptYesNo(t *testing.T) {
 	repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, repoPath)
 
-	tempLogDir, err := os.MkdirTemp("", "gitbak-logs-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir for logs: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempLogDir); err != nil {
-			t.Logf("Failed to remove temporary log directory: %v", err)
-		}
-	}()
+	tempLogDir := t.TempDir()
 
 	tempLogFile := filepath.Join(tempLogDir, "gitbak-test-prompt.log")
 	log := logger.New(true, tempLogFile, true)
+	defer func() {
+		if err := log.Close(); err != nil {
+			t.Logf("Failed to close log: %v", err)
+		}
+	}()
 
 	gb := setupTestGitbak(
 		GitbakConfig{
@@ -750,23 +710,19 @@ func TestNonInteractivePromptYesNo(t *testing.T) {
 // TestGitErrorHandlingWithRealCommands tests error handling by using a real repo but
 // simulating error conditions through repository state
 func TestGitErrorHandlingWithRealCommands(t *testing.T) {
-	repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, repoPath)
-
-	tempLogDir, err := os.MkdirTemp("", "gitbak-logs-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir for logs: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempLogDir); err != nil {
-			t.Logf("Failed to remove temporary log directory: %v", err)
-		}
-	}()
-
-	tempLogFile := filepath.Join(tempLogDir, "gitbak-test.log")
-	log := logger.New(true, tempLogFile, true)
-
 	t.Run("Corrupted repository error handling", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+
+		tempLogDir := t.TempDir()
+		tempLogFile := filepath.Join(tempLogDir, "gitbak-test-corrupted.log")
+		log := logger.New(true, tempLogFile, true)
+		defer func() {
+			if err := log.Close(); err != nil {
+				t.Logf("Failed to close log: %v", err)
+			}
+		}()
+
 		gb := setupTestGitbak(
 			GitbakConfig{
 				RepoPath:        repoPath,
@@ -782,7 +738,8 @@ func TestGitErrorHandlingWithRealCommands(t *testing.T) {
 			log,
 		)
 
-		branch, err := gb.getCurrentBranch()
+		testCtx := context.Background()
+		branch, err := gb.getCurrentBranch(testCtx)
 		if err != nil {
 			t.Fatalf("Failed to get current branch in healthy repo: %v", err)
 		}
@@ -804,18 +761,30 @@ func TestGitErrorHandlingWithRealCommands(t *testing.T) {
 			}
 		}()
 
-		_, err = gb.getCurrentBranch()
+		_, err = gb.getCurrentBranch(testCtx)
 		if err == nil {
 			t.Errorf("Expected getCurrentBranch to fail in corrupted repo, but it succeeded")
 		}
 
-		_, err = gb.hasUncommittedChanges()
+		_, err = gb.hasUncommittedChanges(testCtx)
 		if err == nil {
 			t.Errorf("Expected hasUncommittedChanges to fail in corrupted repo, but it succeeded")
 		}
 	})
 
 	t.Run("Invalid command parameters", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+
+		tempLogDir := t.TempDir()
+		tempLogFile := filepath.Join(tempLogDir, "gitbak-test-invalid-cmd.log")
+		log := logger.New(true, tempLogFile, true)
+		defer func() {
+			if err := log.Close(); err != nil {
+				t.Logf("Failed to close log: %v", err)
+			}
+		}()
+
 		gb := setupTestGitbak(
 			GitbakConfig{
 				RepoPath:        repoPath,
@@ -832,13 +801,24 @@ func TestGitErrorHandlingWithRealCommands(t *testing.T) {
 		)
 
 		// Test with a command that's guaranteed to fail (non-existent ref)
-		output, err := gb.runGitCommandWithOutput("show-ref", "--verify", "refs/heads/non-existent-branch-12345-67890")
+		ctx := context.Background()
+		output, err := gb.runGitCommandWithOutput(ctx, "show-ref", "--verify", "refs/heads/non-existent-branch-12345-67890")
 		if err == nil {
 			t.Errorf("Expected show-ref for non-existent branch to fail, but it succeeded with output: %s", output)
 		}
 	})
 
 	t.Run("Permissions error handling", func(t *testing.T) {
+		t.Parallel()
+		tempLogDir := t.TempDir()
+		tempLogFile := filepath.Join(tempLogDir, "gitbak-test-permissions.log")
+		log := logger.New(true, tempLogFile, true)
+		defer func() {
+			if err := log.Close(); err != nil {
+				t.Logf("Failed to close log: %v", err)
+			}
+		}()
+
 		readOnlyDir, err := os.MkdirTemp("", "gitbak-readonly-*")
 		if err != nil {
 			t.Fatalf("Failed to create temp dir: %v", err)
@@ -872,7 +852,8 @@ func TestGitErrorHandlingWithRealCommands(t *testing.T) {
 			log,
 		)
 
-		err = gb.runGitCommand("init")
+		ctx := context.Background()
+		err = gb.runGitCommand(ctx, "init")
 		if err == nil {
 			t.Errorf("Expected git init in read-only directory to fail, but it succeeded")
 		}

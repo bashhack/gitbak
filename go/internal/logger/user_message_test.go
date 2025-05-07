@@ -9,15 +9,7 @@ import (
 )
 
 func TestUserMessages(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "logger-user-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Logf("Failed to remove temporary directory: %v", err)
-		}
-	}()
+	tempDir := t.TempDir()
 
 	logFile := filepath.Join(tempDir, "test.log")
 

@@ -10,7 +10,12 @@ on:
 jobs:
   test-go:
     name: Test Go Implementation
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false  # Continue with other jobs if one fails
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        go-version: ['1.24']
     defaults:
       run:
         working-directory: ./go
@@ -23,7 +28,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ matrix.go-version }}
           cache: true
 
       - name: Install dependencies
@@ -40,20 +45,27 @@ jobs:
       - name: Run linters
         run: make lint
 
-      - name: Run tests
-        run: make test
-
+      - name: Run unit tests and generate coverage
+        run: |
+          GOMAXPROCS=8 make test
+          make coverage
+        
       - name: Run tests with race detection
-        run: go test -race -tags=testing ./...
-
-      - name: Generate coverage report
-        run: make coverage
+        run: |
+          # Use GOMAXPROCS to limit concurrent execution for race detector
+          GOMAXPROCS=4 go test -race -tags=test ./...
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-          name: go-coverage-report
+          name: go-coverage-report-${{ matrix.os }}
           path: ./go/coverage.html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./go/coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Run integration tests
         run: |
@@ -66,13 +78,17 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: gitbak-binaries
+          name: gitbak-binaries-${{ matrix.os }}
           path: ./go/build/bin/*
           if-no-files-found: error
 
   test-shell:
     name: Test Shell Script Implementation
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false  # Continue with other jobs if one fails
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     defaults:
       run:
         working-directory: ./sh
@@ -80,40 +96,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install shellcheck
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            sudo apt-get update
+            sudo apt-get install -y shellcheck parallel
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            brew install shellcheck parallel
+          fi
 
       - name: Run shellcheck
         run: |
           shellcheck gitbak.sh
           shellcheck tests/*.sh
 
-      - name: Run shell compatibility test
+      - name: Run all shell tests
         run: |
           cd tests
-          ./shell_compatibility.sh
-
-      - name: Run basic functionality test
-        run: |
-          cd tests
-          ./basic_functionality.sh
-
-      - name: Run lock file test
-        run: |
-          cd tests
-          ./lock_file.sh
-
-      - name: Run continuation test
-        run: |
-          cd tests
-          ./continuation.sh
-
-      - name: Run stress test
-        run: |
-          cd tests
-          ./stress_test.sh
+          # Run tests in parallel with limited parallelism (4)
+          # Using GNU Parallel if available, or fall back to sequential execution
+          if command -v parallel &>/dev/null; then
+            echo "Running tests in parallel with GNU Parallel"
+            ls *.sh | grep -v "shell_compatibility.sh" | parallel -j 4 "./{}" 
+            # Run compatibility test separately as it may have dependencies
+            ./shell_compatibility.sh
+          else
+            echo "GNU Parallel not found, running tests sequentially"
+            ./shell_compatibility.sh
+            ./basic_functionality.sh
+            ./lock_file.sh
+            ./continuation.sh
+            ./stress_test.sh
+          fi
 
   build-docs:
     name: Build and Publish Docs
