@@ -1,6 +1,11 @@
 package constants
 
-// Logo is the ASCII art logo for Gitbak
+// Logo is the ASCII art logo for Gitbak.
+// This logo is displayed when the application is run with the --logo flag
+// and appears in the session summary when gitbak completes a session.
+//
+// The ASCII art represents the stylized "gitbak" name with a retro aesthetic
+// that matches the application's branding.
 const Logo = `@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -42,5 +47,8 @@ const Logo = `@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@`
 
-// Tagline is the Gitbak tagline displayed under the logo
+// Tagline is the Gitbak tagline displayed under the logo.
+// This concise phrase describes the core purpose of the application:
+// providing automated safety through regular commits during pair programming sessions.
+// The tagline is centered beneath the ASCII art logo when displayed.
 const Tagline = "Automatic Commit Safety Net for Pair Programming"
