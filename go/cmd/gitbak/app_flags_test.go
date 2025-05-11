@@ -29,7 +29,6 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 				if !app.Config.Version {
 					t.Error("Expected Version flag to be set to true")
 				}
-				// Manually call ShowVersion to generate output
 				app.ShowVersion()
 			},
 		},
@@ -234,6 +233,10 @@ func TestAppRunWithVariousFlagCombinations(t *testing.T) {
 			args:          []string{"gitbak"},
 			expectSuccess: true,
 			checkConfig: func(t *testing.T, app *App) {
+				if app.Config.RepoPath == "" {
+					app.Config.RepoPath = t.TempDir()
+				}
+
 				if err := app.Config.Finalize(); err != nil {
 					t.Fatalf("Config.Finalize() failed: %v", err)
 				}

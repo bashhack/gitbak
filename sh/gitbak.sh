@@ -1,9 +1,10 @@
 #!/bin/sh
 
-# gitbak - Automatic Commit Safety Net for Pair Programming
+# gitbak - Automatic Commit Safety Net
 #
 # This script automatically commits changes to git at regular intervals,
-# providing a safety net for pair programming sessions or long coding sessions.
+# providing a safety net for programming sessions, especially useful for
+# pair programming, long coding sessions or exploratory coding.
 #
 # Usage:
 #   - Run from inside a Git repository: ./gitbak.sh

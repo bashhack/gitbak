@@ -7,6 +7,9 @@ TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR" || exit 1
 
 git init
+# Set git identity for tests
+git config --local user.name "GitBak Test"
+git config --local user.email "gitbak-test@example.com"
 echo "Initial content" >test.txt
 git add test.txt
 git commit -m "Initial commit"
@@ -32,11 +35,14 @@ wait $GITBAK_PID
 COMMIT_COUNT=$(git log --grep "\[gitbak\]" | grep -c "commit")
 if [ "$COMMIT_COUNT" -ge 2 ]; then
     echo "✅ Stress test passed: $COMMIT_COUNT commits created"
+    cd - >/dev/null || exit 1
+    rm -rf "$TEST_DIR"
+    exit 0
 else
     echo "❌ Stress test failed: Only $COMMIT_COUNT commits created"
     echo "Log:"
     cat output.log
+    cd - >/dev/null || exit 1
+    rm -rf "$TEST_DIR"
+    exit 1
 fi
-
-cd - >/dev/null || exit 1
-rm -rf "$TEST_DIR"

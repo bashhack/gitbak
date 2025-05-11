@@ -2,26 +2,22 @@
   <img src="assets/gitbak_retro_logo.png" alt="gitbak logo" width="300">
 </p>
 
-
 <div align="center">
 
 [![Tests](https://github.com/bashhack/gitbak/actions/workflows/ci.yml/badge.svg)](https://github.com/bashhack/gitbak/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/bashhack/gitbak/graph/badge.svg?token=Y3K7R3MHXH)](https://codecov.io/gh/bashhack/gitbak)
+[![Go Reference](https://pkg.go.dev/badge/github.com/bashhack/gitbak)](https://pkg.go.dev/github.com/bashhack/gitbak)
 ![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/bashhack/gitbak?utm_source=oss&utm_medium=github&utm_campaign=bashhack%2Fgitbak&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 </div>
 
-# gitbak - Automatic Commit Safety Net for Pair Programming
+# gitbak - Automatic Commit Safety Net
 
-This lightweight utility automates creating checkpoint commits during pair programming sessions, providing a safety net against accidental code loss.
+> Automated checkpoint commits during programming sessions.
 
-**Available Implementations:**
-- [Go Version](/go/README.md) - Fast, easy to use native binary with improved architecture.
-- [Shell Script Version](/sh/README.md) - Works with bash, zsh, dash, and standard sh but requires POSIX utilities.
+## 🎯 Purpose
 
-## Purpose
-
-When pair programming (with humans or AI assistants like Claude), the conversation and code changes can move quickly.
+When programming (with humans or AI assistants alike), the conversation and code changes can move quickly.
 
 gitbak provides safety by:
 
@@ -30,116 +26,126 @@ gitbak provides safety by:
 - Making a clean history of your pairing session progress
 - Providing recovery points if something goes wrong
 
-This helps you avoid common pitfalls like:
+This helps you avoid common pitfalls like the:
 
-- The "I forgot to commit" panic
-- The "I thought that git command did something else" confusion
-- The "I lost my changes" frustration
-- The "I wish we could go back to that thread we pulled on thirty minutes ago" regret
+- _"I forgot to commit" panic_
+- _"I thought that git command did something else" confusion_
+- _"I lost my changes" frustration_
+- _"I wish we could go back to that thread we pulled on thirty minutes ago" regret_
 
-## Features
+## 💡 Best Practice: Manual + Automatic Workflow
 
-- Automatically commits changes at specified intervals (default: 5 minutes)
-- Creates a dedicated branch for backup commits (configurable)
-- Handles concurrent executions safely with file locking
-- Continuous tracking with sequential commit numbering
-- Support for continuing sessions after breaks or interruptions
-- Robust error handling and retry logic
-- Clean termination when signals are received (including terminal close)
-- Session summary with statistics when you finish
-
-## Quick Start
-
-### Supported Platforms
-
-- **Shell Script Version**: Unix-like systems with a POSIX-compliant shell (Linux, macOS, BSD, etc.)
-- **Go Version**: Cross-platform compatibility on all major operating systems where Git is available:
-   - Linux (x86_64, ARM64)
-   - macOS (Intel and Apple Silicon)
-   - Windows (with Git installed)
-   - BSD variants
-
-The Go implementation overcomes platform limitations of the shell script version, providing a consistent experience across different environments.
-
-### Shell Script Version
+A powerful workflow pattern with gitbak is combining automatic safety checkpoints with manual milestone commits:
 
 ```bash
-# Option 1: Install with curl (recommended)
-curl -fsSL https://raw.githubusercontent.com/bashhack/gitbak/main/sh/install.sh | bash
+# Start gitbak on your current branch
+gitbak -no-branch
 
-# Option 2: Download from GitHub Releases
-# Visit: https://github.com/bashhack/gitbak/releases
+# While gitbak creates automatic commits, you can still:
+git add <files>
+git commit -m "Implement login feature"
 
-# Navigate to your project repository
-cd /path/to/your/project
-
-# Start the auto-commit process
-gitbak
-
-# Press Ctrl+C to stop when finished
+# gitbak continues creating safety checkpoints while you create
+# meaningful commits for important milestones
 ```
 
-For more installation options and detailed instructions, see the [Shell Script Version README](/sh/README.md).
+This gives you both a detailed safety net AND a clean, meaningful commit history - the best of both worlds!
 
-### Go Version
+## 🌟 Features
+
+- **Automatic Commits** - Set and forget checkpoints at regular intervals
+- **Branch Management** - Creates a dedicated branch or uses current one
+- **Session Continuation** - Resume sessions with sequential commit numbering
+- **Robust Error Handling** - Smart retry logic and signal handling
+- **Platform Support** - Available for macOS and Linux systems
+
+## 📦 Installation
+
+### Go Version (Recommended)
 
 ```bash
 # Option 1: Install with Homebrew (macOS and Linux)
 brew install bashhack/gitbak/gitbak
+# Note: Homebrew automatically adds gitbak to your PATH, so it's ready to use immediately
 
-# Option 2: Download from GitHub Releases (macOS, Linux, Windows)
-# Visit: https://github.com/bashhack/gitbak/releases
-
-# Option 3: Install using Go (requires Go 1.24+)
+# Option 2: Install using Go (requires Go 1.24+)
 go install github.com/bashhack/gitbak/go/cmd/gitbak@latest
+# Note: Ensure your Go bin directory (typically $HOME/go/bin) is in your PATH
+# You can add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):
+# export PATH=$PATH:$HOME/go/bin
 
-# Option 4: Build from source
-git clone https://github.com/bashhack/gitbak.git
-cd gitbak/go
-make install
+# Option 3: Download pre-built binary
+# Visit: https://github.com/bashhack/gitbak/releases
+```
 
-# Navigate to your project repository
-cd /path/to/your/project
+### Shell Script Version
 
-# Start the auto-commit process
+```bash
+curl -sL https://github.com/bashhack/gitbak/releases/latest/download/gitbak-shell.tar.gz -o gitbak-shell.tar.gz
+tar -xzf gitbak-shell.tar.gz
+./gitbak-shell/install.sh
+```
+
+The install script will check if the installation directory (default: `~/.local/bin`) is in your PATH and provide instructions if it's not. For more details, see the [Shell Version Documentation](/sh/README.md).
+
+## 🚀 Quick Start
+
+```bash
+# Navigate to your Git repository
+cd /path/to/your/repo
+
+# Start gitbak with default settings (5-minute commits)
 gitbak
 
 # Press Ctrl+C to stop when finished
 ```
 
-## Implementation Comparison
-
-| Feature         | [Shell Script](sh/README.md)                    | [Go Version](go/README.md)                      |
-|-----------------|-------------------------------------------------|-------------------------------------------------|
-| Dependencies    | Git, common Unix tools                          | Git                                             |
-| Installation    | Curl, GitHub Releases, or manual installation   | Homebrew, GitHub Releases, or build from source |
-| Cross-platform  | Unix-like systems with POSIX shell              | Cross-platform (wherever Git is available)      |
-| Resource usage  | ~2-3 MB                                         | ~5-6 MB                                         |
-| Configuration   | Environment variables                           | Command-line flags or Environment variables     |
-| IDE integration | Commands provided for VS Code, JetBrains, Emacs | Commands provided for VS Code, JetBrains, Emacs |
-
-## After Your Session
-
-When your pairing session is complete, you can:
-
-1. Keep all commits by merging the branch as-is
-2. Squash commits into a single meaningful commit
-3. Cherry-pick specific changes
-4. Discard the branch if you don't need the automatic commits
-
-The most common approach for integrating gitbak changes is the squash merge:
+## ⚙️ Configuration
 
 ```bash
-# Switch back to your main branch
-git checkout main
+# Custom interval (2 minutes)
+gitbak -interval 2
 
-# Combine all gitbak commits into a single change set
-git merge --squash gitbak-TIMESTAMP 
+# Custom branch name
+gitbak -branch "feature-work-backup"
 
-# Create a single, meaningful commit with all changes
-git commit -m "Add feature X from pair programming session"
+# Continue a previous session
+gitbak -continue
+
+# Use the current branch
+gitbak -no-branch
+
+# Full options list
+gitbak -help
 ```
 
-## License
+## 🔄 After Your Session
+
+```bash
+# Squash all checkpoint commits into one
+git checkout main
+git merge --squash gitbak-TIMESTAMP 
+git commit -m "Complete feature implementation"
+```
+
+## 📚 Documentation
+
+- [Go Version Documentation](/go/README.md) - Complete instructions for the Go implementation
+- [Shell Script Version](/sh/README.md) - Documentation for the shell script implementation
+- [Usage & Configuration](go/docs/USAGE_AND_CONFIGURATION.md) - Detailed usage instructions with workflow diagrams
+- [After Session Guide](go/docs/AFTER_SESSION.md) - What to do when your session ends
+- [IDE Integration](go/docs/IDE_INTEGRATION.md) - How to integrate with popular editors
+- [Comparison with Alternatives](go/docs/COMPARISON.md) - Why gitbak outshines IDE auto-save features
+
+## 📋 Implementation Comparison
+
+| Feature         | Go Version (Recommended)                     | Shell Version                      |
+|-----------------|----------------------------------------------|------------------------------------|
+| Dependencies    | Git only                                     | Git, common Unix tools             |
+| Platform        | macOS and Linux                              | Unix-like systems with POSIX shell |
+| Configuration   | Command-line flags and environment variables | Environment variables              |
+| Resource usage  | ~5-6 MB                                      | ~2-3 MB                            |
+
+## 📄 License
 
 MIT

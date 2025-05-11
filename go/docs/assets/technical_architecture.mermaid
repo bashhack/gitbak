@@ -1,0 +1,46 @@
+%%{init: {'theme': 'neutral'}}%%
+flowchart TD
+    classDef core fill:#f9f,stroke:#333,stroke-width:2px
+    classDef external fill:#bbf,stroke:#333,stroke-width:2px
+    classDef system fill:#dfd,stroke:#333,stroke-width:2px
+    classDef input fill:#fec,stroke:#333,stroke-width:2px
+    classDef output fill:#cfe,stroke:#333,stroke-width:2px
+    
+    User([User]):::input --> CLI[Command Line Interface]:::input
+    CLI --> Config["Config Manager<br>(flags/env vars)"]:::core
+    
+    %% Core components
+    subgraph "Core Architecture"
+        direction TB
+        
+        Config --> |Initialize| GitOps["Git Operations<br>• Branch management<br>• Commit detection<br>• Checkpoint creation"]:::core
+        
+        Config --> Scheduler["Scheduler<br>• Timer management<br>• Interval control"]:::core
+        
+        Lock["Lock Manager<br>• Single instance<br>• Process locking"]:::core --> GitOps
+        
+        Scheduler --> |Trigger| GitOps
+        
+        SignalHandler["Signal Handler<br>• Graceful termination<br>• Session summaries"]:::core --> GitOps
+        
+        Logger["Logger<br>• Debug logs<br>• User messages"]:::core
+        
+        Config --> Logger
+        GitOps --> Logger
+    end
+    
+    %% External dependencies
+    OS["Operating System<br>• Signals (SIGINT/SIGTERM)<br>• Environment"]:::external --> SignalHandler
+    OS --> Config
+    
+    Git["Git Repository<br>• Working Directory<br>• Commit History"]:::external <--> GitOps
+    
+    FileSystem["File System<br>• Log files<br>• Lock files"]:::external <--> Lock
+    FileSystem <--> Logger
+    
+    %% Output
+    GitOps --> Output["User Output<br>• Commit information<br>• Session summaries<br>• Error messages"]:::output
+    Output --> User
+    
+    %% Execution flow annotation
+    GitOps --> |"1. Check for changes<br>2. Stage files<br>3. Create commit<br>4. Wait for next interval"| GitOps

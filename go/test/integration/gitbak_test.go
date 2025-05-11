@@ -68,7 +68,7 @@ func TestBasicFunctionality(t *testing.T) {
 
 	gitbakBin := filepath.Join("..", "..", "build", "gitbak")
 	if _, err := os.Stat(gitbakBin); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-tags=testing", "-o", gitbakBin, "../../cmd/gitbak")
+		buildCmd := exec.Command("go", "build", "-tags=test", "-o", gitbakBin, "../../cmd/gitbak")
 		if err := buildCmd.Run(); err != nil {
 			t.Fatalf("Failed to build gitbak binary: %v", err)
 		}
@@ -143,7 +143,7 @@ func TestLockFile(t *testing.T) {
 	gitbakBin := filepath.Join("..", "..", "build", "gitbak")
 	if _, err := os.Stat(gitbakBin); os.IsNotExist(err) {
 		// Try to build it
-		buildCmd := exec.Command("go", "build", "-tags=testing", "-o", gitbakBin, "../../cmd/gitbak")
+		buildCmd := exec.Command("go", "build", "-tags=test", "-o", gitbakBin, "../../cmd/gitbak")
 		if err := buildCmd.Run(); err != nil {
 			t.Fatalf("Failed to build gitbak binary: %v", err)
 		}

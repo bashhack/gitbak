@@ -29,6 +29,12 @@ func New(message string) error {
 	return errors.New(message)
 }
 
+// Join joins multiple errors into a single error.
+// This is a convenience function that wraps errors.Join.
+func Join(errs ...error) error {
+	return errors.Join(errs...)
+}
+
 // Errorf creates a new formatted error.
 // This is a convenience function that wraps fmt.Errorf.
 func Errorf(format string, args ...interface{}) error {

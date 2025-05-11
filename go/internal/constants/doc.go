@@ -19,21 +19,4 @@
 //	    fmt.Println(constants.Logo)
 //	    fmt.Println(constants.Tagline)
 //	}
-//
-// # Design Considerations
-//
-// Constants are grouped in this package for several reasons:
-//
-// - Centralization: Makes it easy to find and update application-wide constants
-// - Discoverability: Provides a clear location for all fixed values
-// - Consistency: Ensures the same values are used throughout the application
-// - Separation of Concerns: Keeps presentation elements separate from business logic
-//
-// # Maintenance
-//
-// When adding new constants to this package:
-//
-// - Group related constants together
-// - Provide clear documentation for each constant
-// - Consider the scope and usage across the application
 package constants

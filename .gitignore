@@ -1,6 +1,7 @@
 # Build artifacts
 go/build/
 go/gitbak
+go/dist/
 
 # Test artifacts
 coverage.txt

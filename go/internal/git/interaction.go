@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/bashhack/gitbak/internal/logger"
 )
 
 // UserInteractor defines an interface for interacting with the user
@@ -18,11 +20,11 @@ type UserInteractor interface {
 type DefaultInteractor struct {
 	Reader io.Reader
 	Writer io.Writer
-	Logger Logger
+	Logger logger.Logger
 }
 
 // NewDefaultInteractor creates a new DefaultInteractor
-func NewDefaultInteractor(logger Logger) *DefaultInteractor {
+func NewDefaultInteractor(logger logger.Logger) *DefaultInteractor {
 	return &DefaultInteractor{
 		Reader: os.Stdin,
 		Writer: os.Stdout,

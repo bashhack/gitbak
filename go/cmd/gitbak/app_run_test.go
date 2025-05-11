@@ -4,486 +4,560 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"testing"
 
 	"github.com/bashhack/gitbak/internal/config"
 	"github.com/bashhack/gitbak/internal/logger"
 )
 
-// TestRunWithVersionFlag tests the version flag case
-func TestRunWithVersionFlag(t *testing.T) {
-	var stdout, stderr bytes.Buffer
+// TestAppRunScenarios tests various scenarios for the Run method
+func TestAppRunScenarios(t *testing.T) {
+	tests := map[string]struct {
+		setupFunc      func(t *testing.T) (*App, context.Context)
+		expectError    bool
+		errorContains  string
+		validateOutput func(t *testing.T, app *App, stdout, stderr *bytes.Buffer, err error)
+		validateState  func(t *testing.T, app *App)
+	}{
+		"VersionFlag": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				tmpDir := t.TempDir()
 
-	app := NewDefaultApp(config.VersionInfo{
-		Version: "test-version",
-		Commit:  "test-commit",
-		Date:    "test-date",
-	})
-	app.exit = func(int) {}
-	app.Config.Version = true
-	app.Stdout = &stdout
-	app.Stderr = &stderr
+				app := NewDefaultApp(config.VersionInfo{
+					Version: "test-version",
+					Commit:  "test-commit",
+					Date:    "test-date",
+				})
+				app.exit = func(int) {}
+				app.Config.Version = true
+				app.Config.RepoPath = tmpDir
+				app.Stdout = &stdout
+				app.Stderr = &stderr
 
-	ctx := context.Background()
-	err := app.Run(ctx)
-	if err != nil {
-		t.Errorf("Run returned unexpected error: %v", err)
-	}
+				app.isRepository = func(path string) (bool, error) {
+					return true, nil
+				}
 
-	output := stdout.String()
-	if !bytes.Contains([]byte(output), []byte("gitbak test-version")) {
-		t.Errorf("Expected output to contain version info, got: %s", output)
-	}
-}
-
-// TestRunWithLogoFlagWithMock tests the logo flag case with mocked functions
-func TestRunWithLogoFlagWithMock(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	app := NewDefaultApp(config.VersionInfo{})
-	app.exit = func(int) {}
-	app.Config.ShowLogo = true
-	app.Stdout = &stdout
-	app.Stderr = &stderr
-
-	ctx := context.Background()
-	err := app.Run(ctx)
-	if err != nil {
-		t.Errorf("Run returned unexpected error: %v", err)
-	}
-
-	output := stdout.String()
-	if !bytes.Contains([]byte(output), []byte("@@@@@@")) {
-		t.Errorf("Expected output to contain ASCII art logo with @@ characters")
-	}
-}
-
-// TestRunWithMissingGitCommand tests the case where git is not found
-func TestRunWithMissingGitCommand(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-
-	app := NewDefaultApp(config.VersionInfo{})
-	app.exit = func(int) {}
-	app.execLookPath = func(name string) (string, error) {
-		if name == "git" {
-			return "", errors.New("git not found")
-		}
-		return "/usr/bin/" + name, nil
-	}
-	app.Stdout = &stdout
-	app.Stderr = &stderr
-
-	ctx := context.Background()
-	err := app.Run(ctx)
-	if err == nil {
-		t.Error("Expected Run to return an error when git is not found")
-	}
-
-	errOutput := stderr.String()
-	if !bytes.Contains([]byte(errOutput), []byte("Error:")) {
-		t.Errorf("Expected error output to mention an error, got: %s", errOutput)
-	}
-}
-
-// TestRunWithLockAcquisitionFailure tests the case where lock acquisition fails
-func TestRunWithLockAcquisitionFailure(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		var stdout, stderr bytes.Buffer
-
-		mockLocker := &MockLocker{
-			AcquireErr: errors.New("lock acquisition failed"),
-		}
-
-		app := NewDefaultApp(config.VersionInfo{})
-		app.Stdout = &stdout
-		app.Stderr = &stderr
-		app.Locker = mockLocker
-		app.Logger = logger.New(false, "", true)
-		app.exit = func(int) {}
-
-		app.isRepository = func(path string) (bool, error) {
-			return true, nil
-		}
-
-		app.execLookPath = func(name string) (string, error) {
-			return "/usr/bin/" + name, nil
-		}
-
-		ctx := context.Background()
-		err := app.Run(ctx)
-		if err == nil {
-			t.Error("Expected Run to return an error when lock acquisition fails")
-		}
-
-		if !mockLocker.AcquireCalled {
-			t.Error("Expected locker.Acquire to be called")
-		}
-
-		if err != nil && !bytes.Contains([]byte(err.Error()), []byte("lock")) {
-			t.Errorf("Expected error to mention lock acquisition, got: %v", err)
-		}
-	})
-}
-
-// TestRunWithGitbakRunFailure tests the case where Gitbak.Run fails
-func TestRunWithGitbakRunFailure(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		var stdout, stderr bytes.Buffer
-
-		mockLocker := &MockLocker{}
-
-		mockGitbaker := &MockGitbaker{
-			RunErr: errors.New("gitbak run failed"),
-		}
-
-		app := NewDefaultApp(config.VersionInfo{})
-		app.Stdout = &stdout
-		app.Stderr = &stderr
-		app.Locker = mockLocker
-		app.Logger = logger.New(false, "", true)
-		app.exit = func(int) {}
-		app.Gitbak = mockGitbaker
-
-		app.isRepository = func(path string) (bool, error) {
-			return true, nil
-		}
-
-		app.execLookPath = func(name string) (string, error) {
-			return "/usr/bin/" + name, nil
-		}
-
-		ctx := context.Background()
-		err := app.Run(ctx)
-		if err == nil {
-			t.Error("Expected Run to return an error when Gitbak.Run fails")
-		}
-
-		if !mockGitbaker.RunCalled {
-			t.Error("Expected Gitbak.Run to be called")
-		}
-
-		if err != nil && err.Error() != "gitbak run failed" {
-			t.Errorf("Expected error to be 'gitbak run failed', got: %v", err)
-		}
-
-		if !mockLocker.ReleaseCalled {
-			t.Error("Expected locker.Release to be called during cleanup")
-		}
-	})
-}
-
-// TestRunWithLockReleaseFailure tests the cleanup when lock release fails
-func TestRunWithLockReleaseFailure(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		var stdout, stderr bytes.Buffer
-
-		mockLocker := &MockLocker{
-			ReleaseErr: errors.New("lock release failed"),
-		}
-
-		mockGitbaker := &MockGitbaker{
-			RunErr: errors.New("gitbak run failed"),
-		}
-
-		app := NewDefaultApp(config.VersionInfo{})
-		app.Stdout = &stdout
-		app.Stderr = &stderr
-		app.Locker = mockLocker
-		app.Logger = logger.New(false, "", true)
-		app.exit = func(int) {}
-		app.Gitbak = mockGitbaker
-
-		app.isRepository = func(path string) (bool, error) {
-			return true, nil
-		}
-
-		app.execLookPath = func(name string) (string, error) {
-			return "/usr/bin/" + name, nil
-		}
-
-		ctx := context.Background()
-		err := app.Run(ctx)
-		if err == nil {
-			t.Error("Expected Run to return an error when Gitbak.Run fails")
-		}
-
-		if !mockLocker.ReleaseCalled {
-			t.Error("Expected locker.Release to be called during cleanup")
-		}
-	})
-}
-
-// TestRunWithLoggerAssertionFailure tests the case where Logger type assertion fails
-func TestRunWithLoggerAssertionFailure(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		var stdout, stderr bytes.Buffer
-
-		mockLocker := &MockLocker{}
-
-		mockGitbaker := &MockGitbaker{}
-
-		app := NewDefaultApp(config.VersionInfo{})
-		app.Stdout = &stdout
-		app.Stderr = &stderr
-		app.Locker = mockLocker
-		app.Logger = &MockLogger{}
-		app.exit = func(int) {}
-		app.Gitbak = mockGitbaker
-
-		app.isRepository = func(path string) (bool, error) {
-			return true, nil
-		}
-
-		app.execLookPath = func(name string) (string, error) {
-			return "/usr/bin/" + name, nil
-		}
-
-		ctx := context.Background()
-		err := app.Run(ctx)
-		if err != nil {
-			// We're not expecting an error here, we're testing that the fallback logger works
-			t.Errorf("Run returned unexpected error: %v", err)
-		}
-
-		if !mockGitbaker.RunCalled {
-			t.Error("Expected Gitbak.Run to be called (signaling fallback logger worked)")
-		}
-	})
-}
-
-// TestRunComplete tests a successful run
-func TestRunComplete(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		var stdout, stderr bytes.Buffer
-
-		mockGitbaker := &MockGitbaker{}
-
-		mockLocker := &MockLocker{}
-
-		app := &App{
-			Config: &config.Config{
-				RepoPath:        tempDir,
-				IntervalMinutes: 5,
-				BranchName:      "test-branch",
-				CommitPrefix:    "[test] ",
-				CreateBranch:    true,
-				Verbose:         true,
-				ShowNoChanges:   true,
-				ContinueSession: false,
-				NonInteractive:  true,
+				ctx := context.Background()
+				return app, ctx
 			},
-			Logger:       logger.New(false, "", true),
-			Locker:       mockLocker,
-			execLookPath: func(name string) (string, error) { return "/usr/bin/" + name, nil },
-			Stdout:       &stdout,
-			Stderr:       &stderr,
-			exit:         func(int) {},
-			Gitbak:       mockGitbaker,
-			isRepository: func(path string) (bool, error) {
-				return true, nil
+			expectError: false,
+			validateOutput: func(t *testing.T, app *App, stdout, stderr *bytes.Buffer, err error) {
+				output := stdout.String()
+				if !bytes.Contains([]byte(output), []byte("gitbak test-version")) {
+					t.Errorf("Expected output to contain version info, got: %s", output)
+				}
 			},
-		}
+		},
+		"LogoFlag": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				tmpDir := t.TempDir()
 
-		ctx := context.Background()
-		err := app.Run(ctx)
-		if err != nil {
-			t.Errorf("Run returned unexpected error: %v", err)
-		}
+				app := NewDefaultApp(config.VersionInfo{})
+				app.exit = func(int) {}
+				app.Config.ShowLogo = true
+				app.Config.RepoPath = tmpDir
+				app.Stdout = &stdout
+				app.Stderr = &stderr
 
-		if !mockLocker.AcquireCalled {
-			t.Error("Expected locker.Acquire to be called")
-		}
-		if !mockGitbaker.RunCalled {
-			t.Error("Expected Gitbak.Run to be called")
-		}
+				app.isRepository = func(path string) (bool, error) {
+					return true, nil
+				}
 
-		if !mockLocker.ReleaseCalled {
-			t.Error("Expected locker.Release to be called during cleanup (even on success)")
-		}
-	})
-}
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError: false,
+			validateOutput: func(t *testing.T, app *App, stdout, stderr *bytes.Buffer, err error) {
+				output := stdout.String()
+				if !bytes.Contains([]byte(output), []byte("@@@@@@")) {
+					t.Errorf("Expected output to contain ASCII art logo with @@ characters")
+				}
+			},
+		},
+		"MissingGitCommand": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				tmpDir := t.TempDir()
 
-// TestRunWithGitbakProvidedExternally tests providing a mock Gitbaker
-func TestRunWithGitbakProvidedExternally(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		mockGitbaker := &MockGitbaker{}
+				app := NewDefaultApp(config.VersionInfo{})
+				app.exit = func(int) {}
+				app.Config.RepoPath = tmpDir
+				app.execLookPath = func(name string) (string, error) {
+					if name == "git" {
+						return "", errors.New("git is not found in PATH")
+					}
+					return "/usr/bin/" + name, nil
+				}
+				app.Stdout = &stdout
+				app.Stderr = &stderr
 
-		app := NewTestApp()
-		app.Config.RepoPath = tempDir
-		app.Config.IntervalMinutes = 5
+				app.isRepository = func(path string) (bool, error) {
+					return true, nil
+				}
 
-		app.Stdout = &bytes.Buffer{}
-		app.Stderr = &bytes.Buffer{}
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError:   true,
+			errorContains: "git is not found in PATH",
+			validateOutput: func(t *testing.T, app *App, stdout, stderr *bytes.Buffer, err error) {
+				errOutput := stderr.String()
+				if !bytes.Contains([]byte(errOutput), []byte("Error:")) {
+					t.Errorf("Expected error output to mention an error, got: %s", errOutput)
+				}
+			},
+		},
+		"LockAcquisitionFailure": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				var app *App
 
-		app = WithMockLogger(app, &MockLogger{})
-		app = WithMockLocker(app, &MockLocker{})
-		app = WithSimpleIsRepository(app, func(path string) bool {
-			return true
+				withTempWorkDir(t, func(tempDir string) {
+					mockLocker := &MockLocker{
+						AcquireErr: errors.New("lock acquisition failed"),
+					}
+
+					app = NewDefaultApp(config.VersionInfo{})
+					app.Stdout = &stdout
+					app.Stderr = &stderr
+					app.Locker = mockLocker
+					app.Logger = logger.New(false, "", true)
+					app.exit = func(int) {}
+					app.Config.RepoPath = tempDir
+
+					app.isRepository = func(path string) (bool, error) {
+						return true, nil
+					}
+
+					app.execLookPath = func(name string) (string, error) {
+						return "/usr/bin/" + name, nil
+					}
+				})
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError:   true,
+			errorContains: "lock acquisition failed",
+			validateState: func(t *testing.T, app *App) {
+				mockLocker := app.Locker.(*MockLocker)
+				if !mockLocker.AcquireCalled {
+					t.Error("Expected locker.Acquire to be called")
+				}
+			},
+		},
+		"GitbakRunFailure": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				var app *App
+
+				withTempWorkDir(t, func(tempDir string) {
+					mockLocker := &MockLocker{}
+
+					mockGitbaker := &MockGitbaker{
+						RunErr: errors.New("gitbak run failed"),
+					}
+
+					app = NewDefaultApp(config.VersionInfo{})
+					app.Stdout = &stdout
+					app.Stderr = &stderr
+					app.Locker = mockLocker
+					app.Logger = logger.New(false, "", true)
+					app.exit = func(int) {}
+					app.Gitbak = mockGitbaker
+					app.Config.RepoPath = tempDir
+
+					app.isRepository = func(path string) (bool, error) {
+						return true, nil
+					}
+
+					app.execLookPath = func(name string) (string, error) {
+						return "/usr/bin/" + name, nil
+					}
+				})
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError:   true,
+			errorContains: "gitbak run failed",
+			validateState: func(t *testing.T, app *App) {
+				mockGitbaker := app.Gitbak.(*MockGitbaker)
+				mockLocker := app.Locker.(*MockLocker)
+
+				if !mockGitbaker.RunCalled {
+					t.Error("Expected Gitbak.Run to be called")
+				}
+
+				if !mockLocker.ReleaseCalled {
+					t.Error("Expected locker.Release to be called during cleanup")
+				}
+
+				if mockGitbaker.CommitsCount != 0 {
+					t.Errorf("Expected CommitsCount to remain 0 on error, got: %d", mockGitbaker.CommitsCount)
+				}
+			},
+		},
+		"LockReleaseFailure": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				var app *App
+
+				withTempWorkDir(t, func(tempDir string) {
+					mockLocker := &MockLocker{
+						ReleaseErr: errors.New("lock release failed"),
+					}
+
+					mockGitbaker := &MockGitbaker{
+						RunErr: errors.New("gitbak run failed"),
+					}
+
+					app = NewDefaultApp(config.VersionInfo{})
+					app.Stdout = &stdout
+					app.Stderr = &stderr
+					app.Locker = mockLocker
+					app.Logger = logger.New(false, "", true)
+					app.exit = func(int) {}
+					app.Gitbak = mockGitbaker
+					app.Config.RepoPath = tempDir
+
+					app.isRepository = func(path string) (bool, error) {
+						return true, nil
+					}
+
+					app.execLookPath = func(name string) (string, error) {
+						return "/usr/bin/" + name, nil
+					}
+				})
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError:   true,
+			errorContains: "gitbak run failed",
+			validateState: func(t *testing.T, app *App) {
+				mockLocker := app.Locker.(*MockLocker)
+				if !mockLocker.ReleaseCalled {
+					t.Error("Expected locker.Release to be called during cleanup")
+				}
+			},
+		},
+		"LoggerAssertionFailure": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				var app *App
+
+				withTempWorkDir(t, func(tempDir string) {
+					mockLocker := &MockLocker{}
+					mockGitbaker := &MockGitbaker{}
+
+					app = NewDefaultApp(config.VersionInfo{})
+					app.Stdout = &stdout
+					app.Stderr = &stderr
+					app.Locker = mockLocker
+					app.Logger = &MockLogger{}
+					app.exit = func(int) {}
+					app.Gitbak = mockGitbaker
+					app.Config.RepoPath = tempDir
+
+					app.isRepository = func(path string) (bool, error) {
+						return true, nil
+					}
+
+					app.execLookPath = func(name string) (string, error) {
+						return "/usr/bin/" + name, nil
+					}
+				})
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError: false,
+			validateState: func(t *testing.T, app *App) {
+				mockGitbaker := app.Gitbak.(*MockGitbaker)
+				if !mockGitbaker.RunCalled {
+					t.Error("Expected Gitbak.Run to be called (signaling fallback logger worked)")
+				}
+
+				if mockGitbaker.CommitsCount != 1 {
+					t.Errorf("Expected CommitsCount to be 1 after successful run, got: %d", mockGitbaker.CommitsCount)
+				}
+			},
+		},
+		"SuccessfulRun": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				var app *App
+
+				withTempWorkDir(t, func(tempDir string) {
+					mockGitbaker := &MockGitbaker{}
+					mockLocker := &MockLocker{}
+
+					app = &App{
+						Config: &config.Config{
+							RepoPath:        tempDir,
+							IntervalMinutes: 5,
+							BranchName:      "test-branch",
+							CommitPrefix:    "[test] ",
+							CreateBranch:    true,
+							Verbose:         true,
+							ShowNoChanges:   true,
+							ContinueSession: false,
+							NonInteractive:  true,
+						},
+						Logger:       logger.New(false, "", true),
+						Locker:       mockLocker,
+						execLookPath: func(name string) (string, error) { return "/usr/bin/" + name, nil },
+						Stdout:       &stdout,
+						Stderr:       &stderr,
+						exit:         func(int) {},
+						Gitbak:       mockGitbaker,
+						isRepository: func(path string) (bool, error) {
+							return true, nil
+						},
+					}
+				})
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError: false,
+			validateState: func(t *testing.T, app *App) {
+				mockLocker := app.Locker.(*MockLocker)
+				mockGitbaker := app.Gitbak.(*MockGitbaker)
+
+				if !mockLocker.AcquireCalled {
+					t.Error("Expected locker.Acquire to be called")
+				}
+				if !mockGitbaker.RunCalled {
+					t.Error("Expected Gitbak.Run to be called")
+				}
+				if !mockLocker.ReleaseCalled {
+					t.Error("Expected locker.Release to be called during cleanup (even on success)")
+				}
+
+				if mockGitbaker.CommitsCount != 1 {
+					t.Errorf("Expected CommitsCount to be 1 after successful run, got: %d", mockGitbaker.CommitsCount)
+				}
+			},
+		},
+		"ExternalGitbakProvider": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var app *App
+
+				withTempWorkDir(t, func(tempDir string) {
+					mockGitbaker := &MockGitbaker{}
+
+					app = NewTestApp()
+					app.Config.RepoPath = tempDir
+					app.Config.IntervalMinutes = 5
+
+					app.Stdout = &bytes.Buffer{}
+					app.Stderr = &bytes.Buffer{}
+
+					app = WithMockLogger(app, &MockLogger{})
+					app = WithMockLocker(app, &MockLocker{})
+					app = WithSimpleIsRepository(app, func(path string) bool {
+						return true
+					})
+					app = WithExecLookPath(app, func(string) (string, error) {
+						return "/usr/bin/git", nil
+					})
+
+					app.Gitbak = mockGitbaker
+				})
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError: false,
+			validateState: func(t *testing.T, app *App) {
+				mockGitbaker := app.Gitbak.(*MockGitbaker)
+				if !mockGitbaker.RunCalled {
+					t.Error("Expected Gitbak.Run to be called")
+				}
+
+				if mockGitbaker.CommitsCount != 1 {
+					t.Errorf("Expected CommitsCount to be 1 after successful run, got: %d", mockGitbaker.CommitsCount)
+				}
+			},
+		},
+		"ContinueSessionFromExistingCommits": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var app *App
+
+				withTempWorkDir(t, func(tempDir string) {
+					mockGitbaker := &MockGitbaker{
+						CommitsCount: 5,
+					}
+
+					app = NewTestApp()
+					app.Config.RepoPath = tempDir
+					app.Config.IntervalMinutes = 5
+					app.Config.ContinueSession = true
+					app.Config.BranchName = "test-branch"
+
+					app.Stdout = &bytes.Buffer{}
+					app.Stderr = &bytes.Buffer{}
+
+					app = WithMockLogger(app, &MockLogger{})
+					app = WithMockLocker(app, &MockLocker{})
+					app = WithSimpleIsRepository(app, func(path string) bool {
+						return true
+					})
+					app = WithExecLookPath(app, func(string) (string, error) {
+						return "/usr/bin/git", nil
+					})
+
+					app.Gitbak = mockGitbaker
+				})
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError: false,
+			validateState: func(t *testing.T, app *App) {
+				mockGitbaker := app.Gitbak.(*MockGitbaker)
+				if !mockGitbaker.RunCalled {
+					t.Error("Expected Gitbak.Run to be called")
+				}
+
+				// In continue mode, we expect the commit counter to be incremented from the initial value
+				if mockGitbaker.CommitsCount != 6 {
+					t.Errorf("Expected CommitsCount to be 6 after continuing session, got: %d", mockGitbaker.CommitsCount)
+				}
+			},
+		},
+		"NotGitRepository": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				var app *App
+
+				withTempWorkDir(t, func(tempDir string) {
+					app = NewTestApp()
+					app.Config.RepoPath = tempDir
+					app.Stdout = &stdout
+					app.Stderr = &stderr
+
+					app = WithExecLookPath(app, func(file string) (string, error) {
+						return "/usr/bin/git", nil // Make sure checkRequiredCommands passes
+					})
+
+					app = WithSimpleIsRepository(app, func(path string) bool {
+						return false // Path is not a git repo
+					})
+
+					// First, Initialize should succeed (it doesn't check for git repo)
+					if err := app.Initialize(); err != nil {
+						t.Fatalf("Initialize() unexpectedly failed: %v", err)
+					}
+				})
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError:   true,
+			errorContains: "git repository",
+		},
+		"InitializeFailure": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				tmpDir := t.TempDir()
+
+				app := NewTestApp()
+				app.Config.IntervalMinutes = -1 // Invalid config will cause Initialize to fail
+				app.Config.RepoPath = tmpDir
+				app.Stdout = &stdout
+				app.Stderr = &stderr
+
+				app.isRepository = func(path string) (bool, error) {
+					return true, nil
+				}
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError:   true,
+			errorContains: "invalid",
+		},
+		"RunWithHelp": {
+			setupFunc: func(t *testing.T) (*App, context.Context) {
+				var stdout, stderr bytes.Buffer
+				tmpDir := t.TempDir()
+
+				app := NewDefaultApp(config.VersionInfo{})
+				app.exit = func(int) {}
+				app.Config.ShowHelp = true
+				app.Config.RepoPath = tmpDir
+				app.Stdout = &stdout
+				app.Stderr = &stderr
+
+				app.isRepository = func(path string) (bool, error) {
+					return true, nil
+				}
+
+				ctx := context.Background()
+				return app, ctx
+			},
+			expectError: false,
+			validateOutput: func(t *testing.T, app *App, stdout, stderr *bytes.Buffer, err error) {
+				// Help flag doesn't directly output anything, it's handled by flag package
+				// But Run() should succeed when help flag is set
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			app, ctx := test.setupFunc(t)
+
+			if app.isRepository == nil {
+				app = WithSimpleIsRepository(app, func(path string) bool {
+					return true
+				})
+			}
+
+			if app.Config.RepoPath != "" {
+				if _, err := os.Stat(app.Config.RepoPath); os.IsNotExist(err) {
+					newTmpDir := t.TempDir()
+					t.Logf("Warning: Test repo path %s doesn't exist, using %s instead",
+						app.Config.RepoPath, newTmpDir)
+					app.Config.RepoPath = newTmpDir
+				}
+			} else {
+				app.Config.RepoPath = t.TempDir()
+			}
+
+			stdout, stderr := app.Stdout.(*bytes.Buffer), app.Stderr.(*bytes.Buffer)
+
+			err := app.Run(ctx)
+
+			if test.expectError && err == nil {
+				t.Errorf("Expected error, got nil")
+			}
+
+			if !test.expectError && err != nil {
+				t.Errorf("Expected no error, got: %v", err)
+			}
+
+			if err != nil && test.errorContains != "" {
+				if !bytes.Contains([]byte(err.Error()), []byte(test.errorContains)) {
+					t.Errorf("Expected error to contain '%s', got: %v", test.errorContains, err)
+				}
+			}
+
+			if test.validateOutput != nil {
+				test.validateOutput(t, app, stdout, stderr, err)
+			}
+
+			if test.validateState != nil {
+				test.validateState(t, app)
+			}
 		})
-		app = WithExecLookPath(app, func(string) (string, error) {
-			return "/usr/bin/git", nil
-		})
-
-		app.Gitbak = mockGitbaker
-
-		ctx := context.Background()
-		err := app.Run(ctx)
-		if err != nil {
-			t.Errorf("Run returned unexpected error: %v", err)
-		}
-
-		if !mockGitbaker.RunCalled {
-			t.Error("Expected Gitbak.Run to be called")
-		}
-	})
-}
-
-// Test to cover the lock acquisition error path
-func TestRunWithLockAcquisitionError(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		mockLocker := &MockLocker{
-			AcquireErr: errors.New("test acquisition error"),
-		}
-
-		app := NewTestApp()
-		app.Config.RepoPath = tempDir
-
-		app = WithMockLogger(app, &MockLogger{})
-		app = WithMockLocker(app, mockLocker)
-		app = WithExecLookPath(app, func(string) (string, error) {
-			return "/usr/bin/git", nil
-		})
-		app = WithSimpleIsRepository(app, func(path string) bool {
-			return true
-		})
-
-		app.Stdout = &bytes.Buffer{}
-		app.Stderr = &bytes.Buffer{}
-
-		ctx := context.Background()
-		err := app.Run(ctx)
-
-		if err == nil {
-			t.Error("Expected an error from lock acquisition failure, got nil")
-		}
-
-		if !mockLocker.AcquireCalled {
-			t.Error("Expected Locker.Acquire to be called")
-		}
-	})
-}
-
-// Test to cover the deferred lock release path
-func TestRunWithLockReleaseErrorDeferred(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		mockLocker := &MockLocker{
-			ReleaseErr: errors.New("test release error"),
-		}
-
-		mockGitbaker := &MockGitbaker{
-			RunErr: errors.New("gitbak run error"),
-		}
-
-		app := NewTestApp()
-		app.Config.RepoPath = tempDir
-
-		app = WithMockLogger(app, &MockLogger{})
-		app = WithMockLocker(app, mockLocker)
-		app = WithExecLookPath(app, func(string) (string, error) {
-			return "/usr/bin/git", nil
-		})
-		app = WithSimpleIsRepository(app, func(path string) bool {
-			return true
-		})
-
-		app.Stdout = &bytes.Buffer{}
-		app.Stderr = &bytes.Buffer{}
-
-		app.Gitbak = mockGitbaker
-
-		ctx := context.Background()
-		_ = app.Run(ctx)
-
-		if !mockLocker.ReleaseCalled {
-			t.Error("Expected Locker.Release to be called by deferred function")
-		}
-	})
-}
-
-// TestRunWithNormalGitbakCreation tests the normal Gitbak creation path
-func TestRunWithNormalGitbakCreation(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		app := NewDefaultApp(config.VersionInfo{})
-		app.Config.RepoPath = tempDir
-		app.Config.IntervalMinutes = 5
-		app.Config.BranchName = "test-branch"
-		app.Config.CommitPrefix = "[test] "
-		app.Config.Verbose = true
-
-		app.Logger = logger.New(false, "", true)
-		app.Locker = &MockLocker{}
-		app.execLookPath = func(name string) (string, error) {
-			return "/usr/bin/" + name, nil
-		}
-		app.Stdout = &bytes.Buffer{}
-		app.Stderr = &bytes.Buffer{}
-		app.exit = func(int) {}
-
-		app.isRepository = func(path string) (bool, error) {
-			return true, nil
-		}
-
-		// Create a mock for Gitbak to avoid real git operations
-		// This test is just to cover the creation code path, not the actual run
-		mockGitbaker := &MockGitbaker{}
-		app.Gitbak = mockGitbaker
-
-		ctx := context.Background()
-		err := app.Run(ctx)
-
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-
-		if !mockGitbaker.RunCalled {
-			t.Error("Expected Gitbak.Run to be called")
-		}
-	})
-}
-
-// TestRunWithNotAGitRepoError tests the error case when a path is not a git repository
-func TestRunWithNotAGitRepoError(t *testing.T) {
-	withTempWorkDir(t, func(tempDir string) {
-		var stdout, stderr bytes.Buffer
-
-		app := NewTestApp()
-		app.Config.RepoPath = tempDir
-		app.Stdout = &stdout
-		app.Stderr = &stderr
-
-		app = WithExecLookPath(app, func(file string) (string, error) {
-			return "/usr/bin/git", nil // Make sure checkRequiredCommands passes
-		})
-
-		app = WithSimpleIsRepository(app, func(path string) bool {
-			return false // Path is not a git repo
-		})
-
-		// First, Initialize should succeed (it doesn't check for git repo)
-		if err := app.Initialize(); err != nil {
-			t.Fatalf("Initialize() unexpectedly failed: %v", err)
-		}
-
-		// But Run should fail because it does check for git repo
-		ctx := context.Background()
-		err := app.Run(ctx)
-
-		if err == nil {
-			t.Fatal("Expected Run() to fail when path is not a git repo, got nil")
-		}
-
-		if !bytes.Contains([]byte(err.Error()), []byte("git repository")) {
-			t.Errorf("Expected error to mention git repository, got: %v", err)
-		}
-	})
+	}
 }

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
 )
 
 // Locker prevents concurrent gitbak instances using file locks
@@ -24,8 +24,8 @@ type Locker struct {
 // New creates a Locker for the specified repository path
 func New(repoPath string) (*Locker, error) {
 	if runtime.GOOS == "windows" {
-		return nil, errors.NewLockError("", 0,
-			errors.Wrap(errors.ErrLockAcquisitionFailure,
+		return nil, gitbakErrors.NewLockError("", 0,
+			gitbakErrors.Wrap(gitbakErrors.ErrLockAcquisitionFailure,
 				"gitbak currently only supports Unix-like operating systems (Linux, macOS, BSD). "+
 					"Windows support is not available at this time."))
 	}
@@ -65,21 +65,21 @@ func (l *Locker) tryCreateLock() error {
 		if os.IsExist(err) {
 			return err
 		}
-		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(err, "failed to create lock file"))
+		return gitbakErrors.NewLockError(l.lockFile, 0,
+			gitbakErrors.Wrap(err, "failed to create lock file"))
 	}
 
 	if err = l.acquireFlock(); err != nil {
 		l.closeFileDescriptor()
-		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(err, "failed to acquire lock on newly created lock file"))
+		return gitbakErrors.NewLockError(l.lockFile, 0,
+			gitbakErrors.Wrap(err, "failed to acquire lock on newly created lock file"))
 	}
 
 	if err = l.writePidToLockFile(); err != nil {
 		releaseErr := l.Release()
 		if releaseErr != nil {
 			// Log the release error but return the original error
-			return errors.Wrap(err, fmt.Sprintf("failed to write PID and failed to release lock: %v", releaseErr))
+			return gitbakErrors.Wrap(err, fmt.Sprintf("failed to write PID and failed to release lock: %v", releaseErr))
 		}
 		return err
 	}
@@ -93,8 +93,8 @@ func (l *Locker) tryAcquireExistingLock() error {
 	var err error
 	l.lockFd, err = os.OpenFile(l.lockFile, os.O_RDWR, 0666)
 	if err != nil {
-		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(err, "failed to open existing lock file"))
+		return gitbakErrors.NewLockError(l.lockFile, 0,
+			gitbakErrors.Wrap(err, "failed to open existing lock file"))
 	}
 
 	if err = l.acquireFlock(); err != nil {
@@ -107,19 +107,19 @@ func (l *Locker) tryAcquireExistingLock() error {
 		//     To make your program portable, you should check for both codes
 		//     and treat them the same.
 		// Ref: https://www.gnu.org/savannah-checkouts/gnu/libc/manual/html_node/Error-Codes.html
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+		if gitbakErrors.Is(err, syscall.EWOULDBLOCK) || gitbakErrors.Is(err, syscall.EAGAIN) {
 			return l.handleBlockedLock()
 		}
 
-		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(err, "failed to acquire lock"))
+		return gitbakErrors.NewLockError(l.lockFile, 0,
+			gitbakErrors.Wrap(err, "failed to acquire lock"))
 	}
 
 	if err = l.resetAndWritePid(); err != nil {
 		releaseErr := l.Release()
 		if releaseErr != nil {
 			// Log the release error but return the original error
-			return errors.Wrap(err, fmt.Sprintf("failed to reset/write PID and failed to release lock: %v", releaseErr))
+			return gitbakErrors.Wrap(err, fmt.Sprintf("failed to reset/write PID and failed to release lock: %v", releaseErr))
 		}
 		return err
 	}
@@ -133,12 +133,12 @@ func (l *Locker) tryAcquireExistingLock() error {
 func (l *Locker) handleBlockedLock() error {
 	otherPid, pidErr := l.readLockFilePid()
 	if pidErr != nil {
-		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(pidErr, "another gitbak instance is running, but couldn't identify its PID"))
+		return gitbakErrors.NewLockError(l.lockFile, 0,
+			gitbakErrors.Wrap(pidErr, "another gitbak instance is running, but couldn't identify its PID"))
 	}
 
 	if isProcessRunning(otherPid) {
-		return errors.NewLockError(l.lockFile, otherPid, errors.ErrAlreadyRunning)
+		return gitbakErrors.NewLockError(l.lockFile, otherPid, gitbakErrors.ErrAlreadyRunning)
 	}
 
 	return l.handleStaleLock(otherPid)
@@ -152,8 +152,8 @@ func (l *Locker) acquireFlock() error {
 // resetAndWritePid clears the file and writes the current PID
 func (l *Locker) resetAndWritePid() error {
 	if err := l.lockFd.Truncate(0); err != nil {
-		return errors.NewLockError(l.lockFile, l.pid,
-			errors.Wrap(err, "failed to truncate lock file"))
+		return gitbakErrors.NewLockError(l.lockFile, l.pid,
+			gitbakErrors.Wrap(err, "failed to truncate lock file"))
 	}
 
 	return l.writePidToLockFile()
@@ -163,8 +163,8 @@ func (l *Locker) resetAndWritePid() error {
 func (l *Locker) writePidToLockFile() error {
 	_, err := l.lockFd.WriteAt([]byte(strconv.Itoa(l.pid)), 0)
 	if err != nil {
-		return errors.NewLockError(l.lockFile, l.pid,
-			errors.Wrap(err, "failed to write PID to lock file"))
+		return gitbakErrors.NewLockError(l.lockFile, l.pid,
+			gitbakErrors.Wrap(err, "failed to write PID to lock file"))
 	}
 	return nil
 }
@@ -193,32 +193,32 @@ func (l *Locker) handleStaleLock(otherPid int) error {
 	l.closeFileDescriptor()
 
 	if err := os.Remove(l.lockFile); err != nil {
-		return errors.NewLockError(l.lockFile, otherPid,
-			errors.Wrap(err, fmt.Sprintf("found stale lock file from PID %d, but failed to remove it", otherPid)))
+		return gitbakErrors.NewLockError(l.lockFile, otherPid,
+			gitbakErrors.Wrap(err, fmt.Sprintf("found stale lock file from PID %d, but failed to remove it", otherPid)))
 	}
 
 	var err error
 	l.lockFd, err = os.OpenFile(l.lockFile, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0666)
 	if err != nil {
 		if os.IsExist(err) {
-			return errors.NewLockError(l.lockFile, 0,
-				errors.Wrap(err, "another gitbak instance took the lock immediately after we removed the stale lock"))
+			return gitbakErrors.NewLockError(l.lockFile, 0,
+				gitbakErrors.Wrap(err, "another gitbak instance took the lock immediately after we removed the stale lock"))
 		}
-		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(err, "failed to open lock file after removing stale lock"))
+		return gitbakErrors.NewLockError(l.lockFile, 0,
+			gitbakErrors.Wrap(err, "failed to open lock file after removing stale lock"))
 	}
 
 	if err = l.acquireFlock(); err != nil {
 		l.closeFileDescriptor()
-		return errors.NewLockError(l.lockFile, 0,
-			errors.Wrap(err, "failed to acquire lock even after removing stale lock"))
+		return gitbakErrors.NewLockError(l.lockFile, 0,
+			gitbakErrors.Wrap(err, "failed to acquire lock even after removing stale lock"))
 	}
 
 	if err = l.writePidToLockFile(); err != nil {
 		releaseErr := l.Release()
 		if releaseErr != nil {
 			// Log the release error but return the original error
-			return errors.Wrap(err, fmt.Sprintf("failed to write PID and failed to release lock: %v", releaseErr))
+			return gitbakErrors.Wrap(err, fmt.Sprintf("failed to write PID and failed to release lock: %v", releaseErr))
 		}
 		return err
 	}
@@ -231,13 +231,13 @@ func (l *Locker) handleStaleLock(otherPid int) error {
 func (l *Locker) readLockFilePid() (int, error) {
 	data, err := os.ReadFile(l.lockFile)
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to read lock file")
+		return 0, gitbakErrors.Wrap(err, "failed to read lock file")
 	}
 
 	pidStr := strings.TrimSpace(string(data))
 	pid, err := strconv.Atoi(pidStr)
 	if err != nil {
-		return 0, errors.Wrap(err, "invalid PID in lock file")
+		return 0, gitbakErrors.Wrap(err, "invalid PID in lock file")
 	}
 
 	return pid, nil
@@ -251,23 +251,45 @@ func (l *Locker) Release() error {
 
 	var err error
 
-	if flockErr := syscall.Flock(int(l.lockFd.Fd()), syscall.LOCK_UN); flockErr != nil {
-		err = errors.NewLockError(l.lockFile, l.pid,
-			errors.Wrap(err, "failed to release lock"))
+	// First, try to verify if the file descriptor is valid
+	// We do this by getting file stats, a safer operation than unlocking
+	fd := l.lockFd.Fd()
+	var stat syscall.Stat_t
+	if statErr := syscall.Fstat(int(fd), &stat); statErr != nil {
+		// If we can't even stat the file, it's definitely broken...
+		err = gitbakErrors.NewLockError(l.lockFile, l.pid,
+			gitbakErrors.Wrap(statErr, "failed to stat lock file - file descriptor is invalid"))
+	} else {
+		// We can stat the file, but let's also try to write to it to check if it's valid...
+		// this handles cases where the file descriptor might appear valid but actual operations fail
+		_, writeErr := l.lockFd.WriteAt([]byte{}, 0)
+		if writeErr != nil {
+			err = gitbakErrors.NewLockError(l.lockFile, l.pid,
+				gitbakErrors.Wrap(writeErr, "failed to write to lock file - file descriptor is invalid"))
+		} else {
+			// Attempt to unlock the file
+			if flockErr := syscall.Flock(int(fd), syscall.LOCK_UN); flockErr != nil {
+				err = gitbakErrors.NewLockError(l.lockFile, l.pid,
+					gitbakErrors.Wrap(flockErr, "failed to release lock"))
+			}
+		}
 	}
 
+	// Always try to close the file descriptor, even if previous operations failed
 	if closeErr := l.lockFd.Close(); closeErr != nil && err == nil {
-		err = errors.NewLockError(l.lockFile, l.pid,
-			errors.Wrap(err, "failed to close lock file"))
+		err = gitbakErrors.NewLockError(l.lockFile, l.pid,
+			gitbakErrors.Wrap(closeErr, "failed to close lock file"))
 	}
 
 	l.lockFd = nil
 	l.acquired = false
 
-	// Remove the lock file to clean up and prevent false stale lock detection on next run
+	// Always try to remove the lock file, regardless of previous errors
+	// This ensures we clean up as much as possible even if there were errors
+	// Only report the error if there were no previous errors
 	if removeErr := os.Remove(l.lockFile); removeErr != nil && !os.IsNotExist(removeErr) && err == nil {
-		err = errors.NewLockError(l.lockFile, l.pid,
-			errors.Wrap(err, "failed to remove lock file"))
+		err = gitbakErrors.NewLockError(l.lockFile, l.pid,
+			gitbakErrors.Wrap(removeErr, "failed to remove lock file"))
 	}
 
 	return err

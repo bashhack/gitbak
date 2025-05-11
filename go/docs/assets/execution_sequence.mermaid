@@ -1,0 +1,51 @@
+sequenceDiagram
+    participant User
+    participant CLI as Command Line
+    participant Config as Config Parser
+    participant Lock as Lock Manager
+    participant Git as Git Operations
+    participant Timer as Timer Loop
+    
+    User->>CLI: gitbak [flags]
+    CLI->>Config: Parse flags & env vars
+    
+    alt Help flag present
+        Config-->>User: Display help & exit
+    else Version flag present
+        Config-->>User: Display version & exit
+    else Logo flag present
+        Config-->>User: Display logo & exit
+    else Normal execution
+        Config->>Lock: Acquire lock
+        
+        alt Lock acquired
+            Lock-->>CLI: Lock successful
+            CLI->>Git: Verify repository
+            Git->>Git: Create/use branch
+            
+            loop Timer Loop
+                Timer->>Git: Check for changes
+                
+                alt Changes detected
+                    Git->>Git: Create commit
+                    Git-->>User: Display commit info
+                else No changes
+                    opt Show no changes enabled
+                        Git-->>User: Report no changes
+                    end
+                end
+                
+                Timer->>Timer: Wait for interval
+            end
+        else Lock failed
+            Lock-->>CLI: Another instance running
+            CLI-->>User: Error & exit
+        end
+    end
+    
+    User->>CLI: Ctrl+C / SIGINT
+    CLI->>Timer: Stop timer loop
+    CLI->>Git: Generate summary
+    Git-->>User: Display session summary
+    CLI->>Lock: Release lock
+    CLI-->>User: Exit

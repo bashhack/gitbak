@@ -2,17 +2,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/bashhack/gitbak/internal/common"
 	"github.com/bashhack/gitbak/internal/config"
 	"github.com/bashhack/gitbak/internal/constants"
-	internalErrors "github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
 	"github.com/bashhack/gitbak/internal/git"
 	"github.com/bashhack/gitbak/internal/lock"
 	"github.com/bashhack/gitbak/internal/logger"
@@ -30,47 +28,99 @@ type Locker interface {
 	Release() error
 }
 
-// Logger alias to common.Logger
-type Logger = common.Logger
-
-// AppOptions contains app configuration and dependencies
+// AppOptions contains app configuration and dependencies.
+// This struct allows injection of both required and optional dependencies,
+// enabling flexible configuration and easier testing.
 type AppOptions struct {
-	// Required
+	// Config holds the application configuration settings (required).
+	// The application will panic if this field is nil.
 	Config *config.Config
 
 	// Optional components
-	Logger Logger
+
+	// Logger provides logging functionality (optional, a default will be created if nil).
+	// Used for both internal logging and user-facing messages.
+	Logger logger.Logger
+
+	// Locker manages repository locking (optional, a default will be created if nil).
+	// Used to prevent multiple gitbak instances from running on the same repository.
 	Locker Locker
+
+	// Gitbak performs Git operations (optional, a default will be created if nil).
+	// Handles the core functionality of repository monitoring and automatic commits.
 	Gitbak Gitbaker
 
 	// I/O dependencies
+
+	// Stdout is the writer for standard output (optional, defaults to os.Stdout).
+	// Used for user-facing messages and normal operation output.
 	Stdout io.Writer
+
+	// Stderr is the writer for error output (optional, defaults to os.Stderr).
+	// Used for error messages and warnings.
 	Stderr io.Writer
 
 	// System dependencies
-	Exit         func(code int)
+
+	// Exit is the function to terminate the application (optional, defaults to os.Exit).
+	// Allows customization of the exit behavior, particularly useful in tests.
+	Exit func(code int)
+
+	// ExecLookPath is used to find executables in PATH (optional, defaults to exec.LookPath).
+	// Used to locate the git executable.
 	ExecLookPath func(file string) (string, error)
+
+	// IsRepository checks if a path is a valid Git repository (optional, defaults to git.IsRepository).
+	// Used during initialization to validate the repository path.
 	IsRepository func(string) (bool, error)
 }
 
-// App is the main gitbak application
+// App is the main gitbak application.
+// It orchestrates all components and manages the application lifecycle,
+// handling initialization, command execution, and cleanup.
 type App struct {
+	// Config holds the application configuration and settings.
 	Config *config.Config
-	Logger Logger
+
+	// Logger provides logging functionality for both internal and user-facing messages.
+	Logger logger.Logger
+
+	// Locker manages repository locking to prevent concurrent gitbak instances.
 	Locker Locker
+
+	// Gitbak performs Git operations and implements the core gitbak functionality.
 	Gitbak Gitbaker
 
 	// I/O streams
+
+	// Stdout is the writer for standard output messages.
 	Stdout io.Writer
+
+	// Stderr is the writer for error messages and warnings.
 	Stderr io.Writer
 
 	// System dependencies
-	exit         func(code int)
+
+	// exit is the function to terminate the application with a status code.
+	exit func(code int)
+
+	// execLookPath is used to find the git executable in the system PATH.
 	execLookPath func(file string) (string, error)
+
+	// isRepository checks if a path is a valid Git repository.
 	isRepository func(string) (bool, error)
 }
 
-// NewDefaultApp creates an App with standard dependencies
+// NewDefaultApp creates an App with standard dependencies.
+// It initializes a new Config with the provided version information,
+// loads environment variables, and sets up standard OS dependencies.
+// This is the primary application constructor for normal usage.
+//
+// Parameters:
+//   - versionInfo: Contains version, commit, and build date information
+//
+// Returns:
+//   - An App instance ready for initialization and execution
 func NewDefaultApp(versionInfo config.VersionInfo) *App {
 	cfg := config.New()
 	cfg.VersionInfo = versionInfo
@@ -88,7 +138,19 @@ func NewDefaultApp(versionInfo config.VersionInfo) *App {
 	return NewApp(opts)
 }
 
-// NewApp creates an App with custom dependencies
+// NewApp creates an App with custom dependencies specified in opts.
+// It validates that required dependencies are provided and panics
+// if Config is nil. For any optional dependencies that are nil,
+// this function will create appropriate defaults during initialization.
+//
+// Parameters:
+//   - opts: AppOptions struct containing dependencies and configuration
+//
+// Returns:
+//   - An App instance with the provided configuration and dependencies
+//
+// Panics:
+//   - If opts.Config is nil
 func NewApp(opts AppOptions) *App {
 	if opts.Config == nil {
 		panic("Config is required in AppOptions")
@@ -131,10 +193,10 @@ func (a *App) Initialize() error {
 	if err := a.Config.Finalize(); err != nil {
 		// Since Config.Finalize() already returns a properly wrapped error,
 		// we don't need to wrap it again if it's already our error type
-		if internalErrors.Is(err, internalErrors.ErrInvalidConfiguration) {
+		if gitbakErrors.Is(err, gitbakErrors.ErrInvalidConfiguration) {
 			return err
 		}
-		return internalErrors.Wrap(internalErrors.ErrInvalidConfiguration, err.Error())
+		return gitbakErrors.Wrap(gitbakErrors.ErrInvalidConfiguration, err.Error())
 	}
 
 	if a.Logger == nil {
@@ -144,7 +206,7 @@ func (a *App) Initialize() error {
 	if a.Locker == nil {
 		locker, err := lock.New(a.Config.RepoPath)
 		if err != nil {
-			return internalErrors.Wrap(err, "failed to initialize lock")
+			return gitbakErrors.Wrap(err, "failed to initialize lock")
 		}
 		a.Locker = locker
 	}
@@ -191,6 +253,12 @@ func (a *App) Run(ctx context.Context) error {
 		return nil
 	}
 
+	if a.Config.ShowHelp {
+		// This should never be reached normally because flag package
+		// handles help internally, but we check it just in case
+		return nil
+	}
+
 	// Ensure we always clean up logger / lock, even on early error paths
 	defer func() {
 		if err := a.Close(); err != nil {
@@ -207,10 +275,10 @@ func (a *App) Run(ctx context.Context) error {
 	isRepo, err := a.isRepository(a.Config.RepoPath)
 	if err != nil {
 		a.Logger.Warning("Failed to check if path is a git repository: %v", err)
-		return internalErrors.Wrap(internalErrors.ErrGitOperationFailed, err.Error())
+		return gitbakErrors.Wrap(gitbakErrors.ErrGitOperationFailed, err.Error())
 	}
 	if !isRepo {
-		return internalErrors.ErrNotGitRepository
+		return gitbakErrors.ErrNotGitRepository
 	}
 	a.Logger.Info("Git repository verified")
 
@@ -218,10 +286,10 @@ func (a *App) Run(ctx context.Context) error {
 	if err := a.Locker.Acquire(); err != nil {
 		// Since Locker.Acquire() already returns a properly wrapped error,
 		// we don't need to wrap it again
-		if internalErrors.Is(err, internalErrors.ErrAlreadyRunning) {
+		if gitbakErrors.Is(err, gitbakErrors.ErrAlreadyRunning) {
 			return err
 		}
-		return internalErrors.Wrap(internalErrors.ErrLockAcquisitionFailure, err.Error())
+		return gitbakErrors.Wrap(gitbakErrors.ErrLockAcquisitionFailure, err.Error())
 	}
 
 	// Run main gitbak process
@@ -273,21 +341,19 @@ func (a *App) Close() error {
 	}
 
 	if a.Logger != nil {
-		if l, ok := a.Logger.(*logger.Logger); ok && l != nil {
-			if err := l.Close(); err != nil {
-				_, _ = fmt.Fprintf(a.Stderr, "❌ Failed to close logger: %v\n", err)
-				errs = append(errs, err)
-			}
+		if err := a.Logger.Close(); err != nil {
+			_, _ = fmt.Fprintf(a.Stderr, "❌ Failed to close logger: %v\n", err)
+			errs = append(errs, err)
 		}
 	}
 
 	if len(errs) > 0 {
-		return errors.Join(errs...)
+		return gitbakErrors.Join(errs...)
 	}
 	return nil
 }
 
-// CleanupOnSignal releases locks and shows summary on interruption
+// CleanupOnSignal releases locks and shows a summary on interruption
 func (a *App) CleanupOnSignal() {
 	// Close resources...
 	if err := a.Close(); err != nil {
