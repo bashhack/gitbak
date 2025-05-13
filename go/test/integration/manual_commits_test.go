@@ -167,20 +167,31 @@ func TestManualCommitsMixing(t *testing.T) {
 		`\[gitbak\] Automatic checkpoint #1`,
 	}
 
-	seenCount := 0
-	for i, pattern := range expectedPatterns {
-		found := false
-		for j, line := range commitLines {
-			if j < len(commitLines)-1 && regexp.MustCompile(pattern).MatchString(line) {
-				found = true
-				seenCount++
+	// Verify the interleaved pattern exists in the correct order
+	var patternIndices []int
+	for _, pattern := range expectedPatterns {
+		re := regexp.MustCompile(pattern)
+		idx := -1
+		for i, line := range commitLines {
+			if re.MatchString(line) {
+				idx = i
 				break
 			}
 		}
-		if !found {
-			t.Logf("Warning: Expected pattern '%s' at position %d not found in commit history", pattern, i)
+		if idx == -1 {
+			t.Errorf("Expected pattern '%s' not found in commit history", pattern)
+		} else {
+			patternIndices = append(patternIndices, idx)
 		}
 	}
 
-	t.Logf("Found %d of %d expected commit patterns", seenCount, len(expectedPatterns))
+	// Verify patterns appear in the expected order
+	if len(patternIndices) == len(expectedPatterns) {
+		for i := 0; i < len(patternIndices)-1; i++ {
+			if patternIndices[i] > patternIndices[i+1] {
+				t.Errorf("Commit pattern '%s' found after '%s', expected before",
+					expectedPatterns[i], expectedPatterns[i+1])
+			}
+		}
+	}
 }

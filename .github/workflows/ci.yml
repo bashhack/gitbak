@@ -83,54 +83,12 @@ jobs:
           path: ./go/build/bin/*
           if-no-files-found: error
 
-  test-shell:
-    name: Test Shell Script Implementation
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false  # Continue with other jobs if one fails
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    defaults:
-      run:
-        working-directory: ./sh
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            sudo apt-get update
-            sudo apt-get install -y shellcheck parallel
-          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-            brew install shellcheck parallel
-          fi
-
-      - name: Run shellcheck
-        run: |
-          shellcheck gitbak.sh
-          shellcheck tests/*.sh
-
-      - name: Configure Git for tests
-        run: |
-          git config --global user.name "GitBak Test"
-          git config --global user.email "gitbak-test@example.com"
-          echo "Configured git user identity for testing"
-
-      - name: Run all shell tests
-        run: |
-          cd tests
-          ./shell_compatibility.sh
-          ./basic_functionality.sh
-          ./lock_file.sh
-          ./continuation.sh
-          ./stress_test.sh
 
   update-pkg-go-dev:
     name: Update pkg.go.dev Documentation
     runs-on: ubuntu-latest
-    needs: [test-go, test-shell]
-    if: github.ref == 'refs/heads/main' # Only run on main branch
+    needs: [test-go]
+    if: github.ref_type == 'tag' # Only run when a tag is pushed
 
     steps:
       - uses: actions/checkout@v4
@@ -143,15 +101,19 @@ jobs:
       - name: Trigger pkg.go.dev update
         run: |
           # This makes a request to pkg.go.dev to trigger a refresh of the documentation
-          # It doesn't actually "push" anything, it just asks pkg.go.dev to rescan the repository
-          curl -sSL "https://proxy.golang.org/github.com/bashhack/gitbak/@v/$(git describe --tags --abbrev=0).info"
+          # Using the tag that was just pushed
+          echo "Triggering pkg.go.dev to refresh for tag: ${{ github.ref_name }}"
+          curl -sSL "https://proxy.golang.org/github.com/bashhack/gitbak/@v/${{ github.ref_name }}.info"
 
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [test-go, test-shell]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test-go, update-pkg-go-dev]
+    if: github.ref_type == 'tag'
 
+    # Note: This job requires a 'RELEASE_TOKEN' secret (a personal access token with 'repo' permissions)
+    # The token allows GitHub release creation to trigger subsequent workflow runs
+    
     permissions:
       contents: write
       packages: write
@@ -174,9 +136,10 @@ jobs:
           args: release --clean
           workdir: ./go
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Using RELEASE_TOKEN to enable workflow triggers
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
-      - name: Package shell script for release
+      - name: Package shell script for historical reference
         working-directory: ./sh
         run: |
           # Ensure scripts are executable
@@ -191,12 +154,13 @@ jobs:
           # Create tar.gz archive
           tar -czf gitbak-shell.tar.gz gitbak-shell
 
-          echo "Shell script packaged for release"
+          echo "Shell script packaged for historical reference (unsupported)"
 
       - name: Upload shell script package
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Using the same RELEASE_TOKEN for consistency
+          token: ${{ secrets.RELEASE_TOKEN }}
           # Specify tag name to ensure it attaches to the same release GoReleaser created
           tag_name: ${{ github.ref_name }}
           files: |

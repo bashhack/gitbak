@@ -61,8 +61,6 @@ This gives you both a detailed safety net AND a clean, meaningful commit history
 
 ## 📦 Installation
 
-### Go Version (Recommended)
-
 ```bash
 # Option 1: Install with Homebrew (macOS and Linux)
 brew install bashhack/gitbak/gitbak
@@ -78,15 +76,7 @@ go install github.com/bashhack/gitbak/go/cmd/gitbak@latest
 # Visit: https://github.com/bashhack/gitbak/releases
 ```
 
-### Shell Script Version
-
-```bash
-curl -sL https://github.com/bashhack/gitbak/releases/latest/download/gitbak-shell.tar.gz -o gitbak-shell.tar.gz
-tar -xzf gitbak-shell.tar.gz
-./gitbak-shell/install.sh
-```
-
-The install script will check if the installation directory (default: `~/.local/bin`) is in your PATH and provide instructions if it's not. For more details, see the [Shell Version Documentation](/sh/README.md).
+> ⚠️ **Note**: While a shell script implementation exists in the repository for historical reasons, it is **unsupported** and not recommended for use. The Go version provides better reliability, performance, and ongoing support.
 
 ## 🚀 Quick Start
 
@@ -130,21 +120,20 @@ git commit -m "Complete feature implementation"
 
 ## 📚 Documentation
 
-- [Go Version Documentation](/go/README.md) - Complete instructions for the Go implementation
-- [Shell Script Version](/sh/README.md) - Documentation for the shell script implementation
+- [Documentation](/go/README.md) - Complete instructions for using gitbak
 - [Usage & Configuration](go/docs/USAGE_AND_CONFIGURATION.md) - Detailed usage instructions with workflow diagrams
 - [After Session Guide](go/docs/AFTER_SESSION.md) - What to do when your session ends
 - [IDE Integration](go/docs/IDE_INTEGRATION.md) - How to integrate with popular editors
 - [Comparison with Alternatives](go/docs/COMPARISON.md) - Why gitbak outshines IDE auto-save features
 
-## 📋 Implementation Comparison
+## 📋 Implementation Details
 
-| Feature         | Go Version (Recommended)                     | Shell Version                      |
-|-----------------|----------------------------------------------|------------------------------------|
-| Dependencies    | Git only                                     | Git, common Unix tools             |
-| Platform        | macOS and Linux                              | Unix-like systems with POSIX shell |
-| Configuration   | Command-line flags and environment variables | Environment variables              |
-| Resource usage  | ~5-6 MB                                      | ~2-3 MB                            |
+| Feature         | Details                                      |
+|-----------------|----------------------------------------------|
+| Dependencies    | Git only                                     |
+| Platform        | macOS and Linux                              |
+| Configuration   | Command-line flags and environment variables |
+| Resource usage  | ~5-6 MB                                      |
 
 ## 📄 License
 

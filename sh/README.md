@@ -4,6 +4,8 @@
 
 # gitbak (Shell Script Version)
 
+> ⚠️ **IMPORTANT**: This shell script implementation is **UNSUPPORTED** and maintained only for historical purposes. For production use, please use the [Go implementation](/go/README.md) which provides better reliability, performance, and ongoing support.
+
 A lightweight shell script that automatically commits changes at regular intervals, providing a safety net during programming sessions.
 
 ## Overview

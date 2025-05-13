@@ -32,6 +32,10 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}gitbak${NC} shell script installer"
 echo "==============================================="
+echo -e "${RED}⚠️  WARNING:${NC} This shell script implementation is UNSUPPORTED and maintained only for historical purposes."
+echo -e "${RED}⚠️  WARNING:${NC} For production use, please use the Go implementation which provides better reliability."
+echo -e "${RED}⚠️  WARNING:${NC} See https://github.com/bashhack/gitbak for details on the recommended Go version."
+echo "==============================================="
 
 # Check if curl or wget is available
 if command -v curl >/dev/null 2>&1; then

@@ -9,6 +9,9 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE    ?= $(shell date +%FT%T%z)
 
+# ⚠️ WARNING: This shell script implementation is UNSUPPORTED and maintained only
+# for historical purposes. For production use, please use the Go implementation.
+
 SCRIPT_NAME=gitbak.sh
 TESTS_DIR=tests
 

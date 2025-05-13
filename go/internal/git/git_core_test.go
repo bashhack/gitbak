@@ -1052,6 +1052,7 @@ func TestSessionInitializationScenarios(t *testing.T) {
 			repoPath, log, branchName, commitPrefix := test.setupRepo(t)
 			config := test.config(repoPath, branchName, commitPrefix)
 			gb := setupTestGitbak(config, log)
+			t.Cleanup(func() { _ = log.Close() })
 
 			test.validateFunc(t, gb)
 		})

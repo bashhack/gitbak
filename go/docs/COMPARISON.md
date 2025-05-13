@@ -13,7 +13,7 @@ Key capabilities include:
 - Support for mixing automatic and manual commits
 - Detailed session summaries with statistics
 
-Available as both a Go application and shell script, gitbak works with any editor or IDE, requiring only Git and running as a separate process alongside your development environment.
+Implemented as a lightweight Go application, gitbak works with any editor or IDE, requiring only Git and running as a separate process alongside your development environment.
 
 ### Technical Architecture
 
