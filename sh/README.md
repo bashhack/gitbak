@@ -4,7 +4,9 @@
 
 # gitbak (Shell Script Version)
 
-A lightweight shell script that automatically commits changes at regular intervals, providing a safety net during pair programming sessions.
+> ⚠️ **IMPORTANT**: This shell script implementation is **UNSUPPORTED** and maintained only for historical purposes. For production use, please use the [Go implementation](/go/README.md) which provides better reliability, performance, and ongoing support.
+
+A lightweight shell script that automatically commits changes at regular intervals, providing a safety net during programming sessions.
 
 ## Overview
 
@@ -35,26 +37,28 @@ The shell script version of gitbak is designed to be highly portable, working ac
 
 ## Installation
 
-### Option 1: One-line Installation (Recommended)
+### Option 1: Download from GitHub Releases
 
-Install gitbak with a single command:
+1. Download and install using the tar.gz package:
+   ```bash
+   curl -sL https://github.com/bashhack/gitbak/releases/latest/download/gitbak-shell.tar.gz -o gitbak-shell.tar.gz
+   tar -xzf gitbak-shell.tar.gz
+   ./gitbak-shell/install.sh
+   ```
 
-```bash
-# Install to ~/.local/bin (default)
-curl -fsSL https://raw.githubusercontent.com/bashhack/gitbak/main/sh/install.sh | bash
+   The install script will:
+   - Install gitbak to `~/.local/bin` by default (or a custom directory specified via `INSTALL_DIR`)
+   - Make the script executable
+   - Check if the installation directory is in your PATH
+   - Provide instructions for adding it to your PATH if needed
 
-# Or specify a custom installation directory
-curl -fsSL https://raw.githubusercontent.com/bashhack/gitbak/main/sh/install.sh | INSTALL_DIR=/usr/local/bin bash
-```
+2. Or manually:
+   - Visit the [GitHub Releases page](https://github.com/bashhack/gitbak/releases)
+   - Download the `gitbak.sh` file from the latest release
+   - Make it executable: `chmod +x gitbak.sh`
+   - Move it to a directory in your PATH: `mv gitbak.sh ~/.local/bin/gitbak`
 
-### Option 2: Download from GitHub Releases
-
-1. Visit the [GitHub Releases page](https://github.com/bashhack/gitbak/releases)
-2. Download the `gitbak.sh` file from the latest release
-3. Make it executable: `chmod +x gitbak.sh`
-4. Move it to a directory in your PATH: `mv gitbak.sh ~/.local/bin/gitbak`
-
-### Option 3: Manual Installation
+### Option 2: Manual Installation
 
 1. Clone the repository:
    ```bash
@@ -151,6 +155,32 @@ cd /path/to/gitbak/sh/tests
 3. When changes are detected, they're committed with a numbered, timestamped message
 4. It handles errors gracefully and retries when git commands fail
 5. The script continues until you stop it with `Ctrl+C`
+
+## 💡 Power User Workflow: Mixing Manual and Automatic Commits
+
+One of gitbak's most powerful capabilities is supporting manual commits alongside automatic ones:
+
+```bash
+# Start gitbak with no-branch option
+CREATE_BRANCH=false gitbak
+
+# While gitbak runs in the background:
+# 1. Make changes to your code
+# 2. When you reach a meaningful milestone, make a manual commit:
+git add <specific-files>
+git commit -m "Implement login feature"
+# 3. Continue working as normal - gitbak keeps making checkpoints
+```
+
+Benefits of this approach:
+- Automatic safety checkpoints happen even if you forget to commit
+- You maintain control over your repository's important milestones
+- gitbak's automatic numbering remains sequential despite manual commits
+- When you're done, you can keep your meaningful commits and discard the automatic ones
+
+This gives you the best of both worlds: meaningful commit history AND comprehensive safety.
+
+> 💡 See [Comparison with Alternatives](/go/docs/COMPARISON.md) for why this approach is superior to IDE auto-save features.
 
 ## After Your Session
 

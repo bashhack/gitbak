@@ -32,6 +32,10 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}gitbak${NC} shell script installer"
 echo "==============================================="
+echo -e "${RED}⚠️  WARNING:${NC} This shell script implementation is UNSUPPORTED and maintained only for historical purposes."
+echo -e "${RED}⚠️  WARNING:${NC} For production use, please use the Go implementation which provides better reliability."
+echo -e "${RED}⚠️  WARNING:${NC} See https://github.com/bashhack/gitbak for details on the recommended Go version."
+echo "==============================================="
 
 # Check if curl or wget is available
 if command -v curl >/dev/null 2>&1; then
@@ -63,9 +67,39 @@ if [ "$GITBAK_VERSION" = "latest" ]; then
     DOWNLOAD_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main/sh/gitbak.sh"
     $DOWNLOAD_CMD "$DOWNLOAD_URL" > "$INSTALL_DIR/gitbak"
 else
-    # Download from a specific release
-    DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$GITBAK_VERSION/gitbak.sh"
-    $DOWNLOAD_CMD "$DOWNLOAD_URL" > "$INSTALL_DIR/gitbak"
+    echo -e "Downloading release version ${BLUE}$GITBAK_VERSION${NC}..."
+    
+    # Create a temporary directory for extraction
+    TMP_DIR=$(mktemp -d)
+    
+    # Download the archive
+    ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$GITBAK_VERSION/gitbak-shell.tar.gz"
+    ARCHIVE_PATH="$TMP_DIR/gitbak-shell.tar.gz"
+    
+    # Try to download the archive first (preferred method)
+    if $DOWNLOAD_CMD "$ARCHIVE_URL" > "$ARCHIVE_PATH" 2>/dev/null; then
+        echo -e "Extracting archive..."
+        tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
+        cp "$TMP_DIR/gitbak-shell/gitbak.sh" "$INSTALL_DIR/gitbak"
+    else
+        # Fall back to direct script download for backward compatibility
+        echo -e "Archive not found, trying direct script download..."
+        SCRIPT_URL="https://raw.githubusercontent.com/$GITHUB_REPO/$GITBAK_VERSION/sh/gitbak.sh"
+        if ! $DOWNLOAD_CMD "$SCRIPT_URL" > "$INSTALL_DIR/gitbak" 2>/dev/null; then
+            echo -e "${YELLOW}Warning:${NC} Could not download from version tag, trying release asset..."
+            SCRIPT_URL="https://github.com/$GITHUB_REPO/releases/download/$GITBAK_VERSION/gitbak.sh"
+            if ! $DOWNLOAD_CMD "$SCRIPT_URL" > "$INSTALL_DIR/gitbak" 2>/dev/null; then
+                echo -e "${RED}Error:${NC} Could not download gitbak script. Please check the version and try again."
+                rm -rf "$TMP_DIR"
+                exit 1
+            else
+                echo -e "Downloaded from release asset."
+            fi
+        fi
+    fi
+    
+    # Clean up temporary directory
+    rm -rf "$TMP_DIR"
 fi
 
 # Make the script executable

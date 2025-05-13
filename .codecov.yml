@@ -37,3 +37,7 @@ ignore:
   - ".github/**/*"                # GitHub workflow files
   - "docs/**/*"                   # Documentation
   - "**/*.md"                     # Markdown files
+  - "go/cmd/gitbak/app_test_helpers.go"  # Test helper functions
+  - "go/internal/git/mocks.go"    # Mock implementations
+  - "go/internal/git/test_helpers.go"  # Test helper functions
+  - "**/*test_helpers.go"         # Any other test helper files

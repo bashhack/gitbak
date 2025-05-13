@@ -3,12 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/bashhack/gitbak/internal/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
-
-	"github.com/bashhack/gitbak/internal/config"
 )
 
 // MockGitbaker implements a mock of the Gitbaker interface for testing.
@@ -18,6 +17,7 @@ type MockGitbaker struct {
 	RunCalled     bool
 	RunErr        error
 	LastContext   context.Context
+	CommitsCount  int
 }
 
 func (m *MockGitbaker) PrintSummary() {
@@ -27,6 +27,10 @@ func (m *MockGitbaker) PrintSummary() {
 func (m *MockGitbaker) Run(ctx context.Context) error {
 	m.RunCalled = true
 	m.LastContext = ctx
+	// Increment commit count on successful execution
+	if m.RunErr == nil {
+		m.CommitsCount++
+	}
 	return m.RunErr
 }
 
@@ -64,6 +68,8 @@ type MockLogger struct {
 	SuccessCalled       bool   // Set to true when Success() is called
 	StatusCalled        bool   // Set to true when StatusMessage() is called
 	LastMessage         string // Contains the most recent message passed to any log method
+	CloseCalled         bool   // Set to true when Close() is called
+	CloseErr            error  // Error to return from Close()
 }
 
 // Standard logging methods
@@ -112,20 +118,23 @@ func (m *MockLogger) StatusMessage(format string, args ...interface{}) {
 	m.LastMessage = fmt.Sprintf(format, args...)
 }
 
+// Close ensures any buffered data is written and closes log files
+func (m *MockLogger) Close() error {
+	m.CloseCalled = true
+	return m.CloseErr
+}
+
 // withTempWorkDir creates a temporary directory, changes to it, and
 // executes the provided function. It handles cleanup and restoring
 // the original working directory.
 func withTempWorkDir(t *testing.T, fn func(dir string)) {
 	t.Helper()
 
-	// Get the current working directory, but don't fail the test if it fails...
-	// this should give some resilience over issues in CI environments where
-	// the original directory might be deleted (as appears to have just happened
-	// to me in GH Actions...)
+	// Get the current working directory, but continue if it fails
+	// (important for CI environments where directories may be inaccessible)
 	orig, err := os.Getwd()
 	if err != nil {
 		t.Logf("Warning: Failed to get current working directory: %v", err)
-		// Continue with temp directory creation even if we can't get the original directory
 	}
 
 	tmp := t.TempDir()
@@ -134,14 +143,19 @@ func withTempWorkDir(t *testing.T, fn func(dir string)) {
 		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
 
-	// Only try to restore the original directory if we successfully got it
-	if orig != "" {
-		defer func() {
-			if err := os.Chdir(orig); err != nil {
-				t.Logf("Failed to restore working directory: %v", err)
+	// Restore original directory if possible
+	defer func() {
+		if orig != "" {
+			// Check if the original directory still exists before changing back
+			if _, err := os.Stat(orig); err == nil {
+				if err := os.Chdir(orig); err != nil {
+					t.Logf("Failed to restore original working directory: %v", err)
+				}
+			} else {
+				t.Logf("Original directory no longer accessible: %v", err)
 			}
-		}()
-	}
+		}
+	}()
 
 	fn(tmp)
 }
@@ -202,6 +216,20 @@ func NewTestApp() *App {
 
 	app.exit = func(int) {}
 
+	// Use a temp directory by default to ensure it exists
+	// This is especially important in CI environments
+	app.Config.RepoPath = os.TempDir()
+
+	// Setup to bypass repository checks for basic tests
+	app = WithSimpleIsRepository(app, func(path string) bool {
+		return true // Assume it's a valid repo for most tests
+	})
+
+	// Make sure command lookups succeed
+	app = WithExecLookPath(app, func(file string) (string, error) {
+		return "/usr/bin/git", nil
+	})
+
 	return app
 }
 
@@ -247,13 +275,5 @@ func WithSimpleIsRepository(app *App, simpleFn func(string) bool) *App {
 // accept a command name and return its path or an error if not found.
 func WithExecLookPath(app *App, fn func(string) (string, error)) *App {
 	app.execLookPath = fn
-	return app
-}
-
-// WithExit replaces the app's exit function to prevent tests from terminating the process.
-// The provided function will be called instead of os.Exit, allowing tests to
-// verify that the app exits with the expected status code under various conditions.
-func WithExit(app *App, fn func(int)) *App {
-	app.exit = fn
 	return app
 }

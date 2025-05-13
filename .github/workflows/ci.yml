@@ -47,13 +47,14 @@ jobs:
 
       - name: Run unit tests and generate coverage
         run: |
-          GOMAXPROCS=8 make test
+          GOMAXPROCS=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4) make test
           make coverage
-        
+
       - name: Run tests with race detection
         run: |
-          # Use GOMAXPROCS to limit concurrent execution for race detector
-          GOMAXPROCS=4 go test -race -tags=test ./...
+          CORES=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
+          RACE_CORES=$([ $CORES -gt 4 ] && echo 4 || echo $CORES)
+          GOMAXPROCS=$RACE_CORES go test -race -tags=test ./...
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -82,58 +83,12 @@ jobs:
           path: ./go/build/bin/*
           if-no-files-found: error
 
-  test-shell:
-    name: Test Shell Script Implementation
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false  # Continue with other jobs if one fails
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    defaults:
-      run:
-        working-directory: ./sh
 
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            sudo apt-get update
-            sudo apt-get install -y shellcheck parallel
-          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-            brew install shellcheck parallel
-          fi
-
-      - name: Run shellcheck
-        run: |
-          shellcheck gitbak.sh
-          shellcheck tests/*.sh
-
-      - name: Run all shell tests
-        run: |
-          cd tests
-          # Run tests in parallel with limited parallelism (4)
-          # Using GNU Parallel if available, or fall back to sequential execution
-          if command -v parallel &>/dev/null; then
-            echo "Running tests in parallel with GNU Parallel"
-            ls *.sh | grep -v "shell_compatibility.sh" | parallel -j 4 "./{}" 
-            # Run compatibility test separately as it may have dependencies
-            ./shell_compatibility.sh
-          else
-            echo "GNU Parallel not found, running tests sequentially"
-            ./shell_compatibility.sh
-            ./basic_functionality.sh
-            ./lock_file.sh
-            ./continuation.sh
-            ./stress_test.sh
-          fi
-
-  build-docs:
-    name: Build and Publish Docs
+  update-pkg-go-dev:
+    name: Update pkg.go.dev Documentation
     runs-on: ubuntu-latest
-    needs: [test-go, test-shell]
-    if: github.ref == 'refs/heads/main' # Only run on main branch
+    needs: [test-go]
+    if: github.ref_type == 'tag' # Only run when a tag is pushed
 
     steps:
       - uses: actions/checkout@v4
@@ -143,62 +98,75 @@ jobs:
         with:
           go-version: '1.24'
 
-      - name: Install godoc
-        run: go install golang.org/x/tools/cmd/godoc@latest
-
-      - name: Generate docs
+      - name: Trigger pkg.go.dev update
         run: |
-          cd go
-          mkdir -p ../docs
-          go doc -all ./... > ../docs/api.md
-          cp README.md ../docs/go.md
-          cd ..
-          cp sh/README.md docs/sh.md
-          cp README.md docs/index.md
+          # This makes a request to pkg.go.dev to trigger a refresh of the documentation
+          # Using the tag that was just pushed
+          echo "Triggering pkg.go.dev to refresh for tag: ${{ github.ref_name }}"
+          curl -sSL "https://proxy.golang.org/github.com/bashhack/gitbak/@v/${{ github.ref_name }}.info"
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        if: github.ref == 'refs/heads/main'
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [test-go, update-pkg-go-dev]
+    if: github.ref_type == 'tag'
+
+    # Note: This job requires a 'RELEASE_TOKEN' secret (a personal access token with 'repo' permissions)
+    # The token allows GitHub release creation to trigger subsequent workflow runs
+    
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
-          publish_branch: gh-pages
-          force_orphan: true
+          fetch-depth: 0
 
-#  release:
-#    name: Release
-#    runs-on: ubuntu-latest
-#    needs: [test-go, test-shell]
-#    if: startsWith(github.ref, 'refs/tags/v')
-#
-#    permissions:
-#      contents: write
-#      packages: write
-#
-#    steps:
-#      - uses: actions/checkout@v4
-#        with:
-#          fetch-depth: 0
-#
-#      - name: Set up Go
-#        uses: actions/setup-go@v5
-#        with:
-#          go-version: '1.24'
-#
-#      - name: Run GoReleaser
-#        uses: goreleaser/goreleaser-action@v5
-#        with:
-#          distribution: goreleaser
-#          version: latest
-#          args: release --clean
-#          workdir: ./go
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
-#      - name: Upload shell script version
-#        uses: softprops/action-gh-release@v1
-#        with:
-#          files: |
-#            ./sh/gitbak.sh
-#          generate_release_notes: true
-#          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+          workdir: ./go
+        env:
+          # Using RELEASE_TOKEN to enable workflow triggers
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Package shell script for historical reference
+        working-directory: ./sh
+        run: |
+          # Ensure scripts are executable
+          chmod +x gitbak.sh install.sh
+
+          # Create a directory with the release tag name
+          mkdir -p gitbak-shell
+
+          # Copy required files
+          cp gitbak.sh README.md install.sh gitbak-shell/
+
+          # Create tar.gz archive
+          tar -czf gitbak-shell.tar.gz gitbak-shell
+
+          echo "Shell script packaged for historical reference (unsupported)"
+
+      - name: Upload shell script package
+        uses: softprops/action-gh-release@v2
+        with:
+          # Using the same RELEASE_TOKEN for consistency
+          token: ${{ secrets.RELEASE_TOKEN }}
+          # Specify tag name to ensure it attaches to the same release GoReleaser created
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ./sh/gitbak-shell.tar.gz
+            ./sh/install.sh
+          # Disable GitHub's auto-generated notes since GoReleaser already creates them
+          generate_release_notes: false
+          # Mark as prerelease for alpha/beta/rc versions
+          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}

@@ -6,6 +6,9 @@ ORIGINAL_DIR=$(cd "$(dirname "$0")/.." && pwd)
 TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR" || exit 1
 git init
+# Set git identity for tests
+git config --local user.name "GitBak Test"
+git config --local user.email "gitbak-test@example.com"
 echo "Initial content" >test.txt
 git add test.txt
 git commit -m "Initial commit"
@@ -35,11 +38,14 @@ SECOND_NUM=$(echo "$COMMIT_MSGS" | head -2 | tail -1 | grep -o "#[0-9]\+" | grep
 
 if [ "$FIRST_NUM" -gt "$SECOND_NUM" ]; then
     echo "✅ Continuation test passed: Commit numbering continues ($SECOND_NUM -> $FIRST_NUM)"
+    cd - >/dev/null || exit 1
+    rm -rf "$TEST_DIR"
+    exit 0
 else
     echo "❌ Continuation test failed: Commit numbering doesn't continue ($SECOND_NUM -> $FIRST_NUM)"
     echo "Commit messages:"
     echo "$COMMIT_MSGS"
+    cd - >/dev/null || exit 1
+    rm -rf "$TEST_DIR"
+    exit 1
 fi
-
-cd - >/dev/null || exit 1
-rm -rf "$TEST_DIR"

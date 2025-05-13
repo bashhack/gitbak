@@ -74,6 +74,15 @@ test/integration:
 coverage:
 	@echo 'Running tests with coverage and the "test" build tag using $(PARALLEL_COUNT) parallel tests...'
 	@go test -coverprofile=coverage.txt -tags=test -parallel=$(PARALLEL_COUNT) ./...
+	@# Filter out test helpers and mock files from coverage.txt
+	@grep -v "_test_helpers.go:" coverage.txt | \
+		grep -v "mock_.*_test.go:" | \
+		grep -v "mocks.go:" | \
+		grep -v "test_helpers.go:" | \
+		grep -v "setupTestRepo" | \
+		grep -v "main" | \
+		grep -v "setupTestGitbak" > coverage_filtered.txt
+	@mv coverage_filtered.txt coverage.txt
 	@go tool cover -html=coverage.txt -o coverage.html
 	@echo "Coverage report generated at coverage.html"
 
@@ -82,6 +91,15 @@ coverage:
 coverage/func:
 	@echo 'Generating function-level coverage report with the "test" build tag using $(PARALLEL_COUNT) parallel tests...'
 	@go test -coverprofile=coverage.txt -tags=test -parallel=$(PARALLEL_COUNT) ./...
+	@# Filter out test helpers and mock files from coverage.txt
+	@grep -v "_test_helpers.go:" coverage.txt | \
+		grep -v "mock_.*_test.go:" | \
+		grep -v "mocks.go:" | \
+		grep -v "test_helpers.go:" | \
+		grep -v "setupTestRepo" | \
+		grep -v "main" | \
+		grep -v "setupTestGitbak" > coverage_filtered.txt
+	@mv coverage_filtered.txt coverage.txt
 	@go tool cover -func=coverage.txt
 
 # ============================================================================= #
@@ -143,6 +161,8 @@ audit:
 	@$(MAKE) lint
 	@echo 'Running tests with race detection and the "test" build tag using $(PARALLEL_COUNT) parallel tests...'
 	go test -race -vet=off -tags=test -parallel=$(PARALLEL_COUNT) ./...
+	@echo 'Generating coverage report (excluding test helpers)...'
+	@$(MAKE) coverage/func
 
 ## vendor: Tidy and vendor dependencies
 .PHONY: vendor

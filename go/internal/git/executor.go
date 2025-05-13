@@ -5,7 +5,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
 )
 
 // CommandExecutor defines an interface for executing commands
@@ -34,8 +34,8 @@ func NewExecExecutor() *ExecExecutor {
 
 // handleExecutionError creates a standardized GitError from a command execution error
 func (e *ExecExecutor) handleExecutionError(operation string, args []string, err error, stderr string) error {
-	wrappedErr := errors.Wrap(err, "git operation failed")
-	return errors.NewGitError(operation, args, wrappedErr, stderr)
+	wrappedErr := gitbakErrors.Wrap(err, "git operation failed")
+	return gitbakErrors.NewGitError(operation, args, wrappedErr, stderr)
 }
 
 // extractCommandInfo extracts the operation name and arguments from a command

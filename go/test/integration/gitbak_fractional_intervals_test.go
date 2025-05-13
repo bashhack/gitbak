@@ -1,4 +1,5 @@
-//go:build integration && test
+//go:build integration
+// +build integration
 
 package integration
 

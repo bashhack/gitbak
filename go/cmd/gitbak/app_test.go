@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/bashhack/gitbak/internal/config"
+	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
 	"github.com/bashhack/gitbak/internal/logger"
 )
 
@@ -39,139 +40,344 @@ func (m *mockExecLookPath) LookPath(file string) (string, error) {
 	return "", fmt.Errorf("command not found: %s", file)
 }
 
-func TestNewDefaultApp(t *testing.T) {
-	versionInfo := config.VersionInfo{
-		Version: "test",
-		Commit:  "test-commit",
-		Date:    "test-date",
-	}
+// TestAppCoreScenarios tests various core app functionality scenarios
+func TestAppCoreScenarios(t *testing.T) {
+	tests := map[string]struct {
+		setupFunc     func(t *testing.T) *App
+		expectError   bool
+		errorContains string
+		validateFunc  func(t *testing.T, app *App)
+	}{
+		"NewDefaultApp": {
+			setupFunc: func(t *testing.T) *App {
+				versionInfo := config.VersionInfo{
+					Version: "test",
+					Commit:  "test-commit",
+					Date:    "test-date",
+				}
 
-	app := NewDefaultApp(versionInfo)
-	app.exit = func(int) {}
+				app := NewDefaultApp(versionInfo)
+				app.exit = func(int) {}
 
-	if app.Config.VersionInfo.Version != "test" {
-		t.Errorf("Expected Version=test, got %s", app.Config.VersionInfo.Version)
-	}
-	if app.Config.VersionInfo.Commit != "test-commit" {
-		t.Errorf("Expected Commit=test-commit, got %s", app.Config.VersionInfo.Commit)
-	}
-	if app.Config.VersionInfo.Date != "test-date" {
-		t.Errorf("Expected Date=test-date, got %s", app.Config.VersionInfo.Date)
-	}
+				tmpDir := t.TempDir()
+				app.Config.RepoPath = tmpDir
 
-	if app.Stdout == nil {
-		t.Error("Expected Stdout to be set, got nil")
-	}
-	if app.Stderr == nil {
-		t.Error("Expected Stderr to be set, got nil")
-	}
-	if app.execLookPath == nil {
-		t.Error("Expected execLookPath to be set, got nil")
-	}
-	if app.exit == nil {
-		t.Error("Expected exit to be set, got nil")
-	}
-}
+				return app
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, app *App) {
+				if app.Config.VersionInfo.Version != "test" {
+					t.Errorf("Expected Version=test, got %s", app.Config.VersionInfo.Version)
+				}
+				if app.Config.VersionInfo.Commit != "test-commit" {
+					t.Errorf("Expected Commit=test-commit, got %s", app.Config.VersionInfo.Commit)
+				}
+				if app.Config.VersionInfo.Date != "test-date" {
+					t.Errorf("Expected Date=test-date, got %s", app.Config.VersionInfo.Date)
+				}
 
-func TestAppShowVersion(t *testing.T) {
-	versionInfo := config.VersionInfo{
-		Version: "test",
-		Commit:  "abc123",
-		Date:    "2023-01-01",
-	}
-
-	var stdout bytes.Buffer
-
-	mockExit := &mockExit{}
-
-	cfg := config.New()
-	cfg.VersionInfo = versionInfo
-
-	app := NewApp(AppOptions{
-		Config: cfg,
-		Stdout: &stdout,
-		Exit:   mockExit.Exit,
-	})
-
-	app.ShowVersion()
-
-	expected := "gitbak test (abc123) built on 2023-01-01\n"
-	if stdout.String() != expected {
-		t.Errorf("Expected output %q, got %q", expected, stdout.String())
-	}
-}
-
-func TestAppShowLogo(t *testing.T) {
-	var stdout bytes.Buffer
-
-	cfg := config.New()
-	cfg.VersionInfo = config.VersionInfo{}
-
-	app := NewApp(AppOptions{
-		Config: cfg,
-		Stdout: &stdout,
-	})
-
-	app.ShowLogo()
-
-	output := stdout.String()
-	if !bytes.Contains([]byte(output), []byte("Automatic Commit Safety Net")) {
-		t.Errorf("Logo output does not contain expected tagline: %s", output)
-	}
-}
-
-func TestAppCheckRequiredCommands(t *testing.T) {
-	mockLookPath := &mockExecLookPath{
-		lookupMap: map[string]string{
-			"git":    "/usr/bin/git",
-			"grep":   "/usr/bin/grep",
-			"sed":    "/usr/bin/sed",
-			"shasum": "/usr/bin/shasum",
+				if app.Stdout == nil {
+					t.Error("Expected Stdout to be set, got nil")
+				}
+				if app.Stderr == nil {
+					t.Error("Expected Stderr to be set, got nil")
+				}
+				if app.execLookPath == nil {
+					t.Error("Expected execLookPath to be set, got nil")
+				}
+				if app.exit == nil {
+					t.Error("Expected exit to be set, got nil")
+				}
+			},
 		},
-		lookupErr: map[string]error{},
+		"NewAppWithMinimalOptions": {
+			setupFunc: func(t *testing.T) *App {
+				// Only provide the required Config parameter
+				tmpDir := t.TempDir()
+				cfg := config.New()
+				cfg.RepoPath = tmpDir
+
+				app := NewApp(AppOptions{
+					Config: cfg,
+				})
+
+				return app
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, app *App) {
+				// Test that all defaults were set
+				if app.Stdout == nil {
+					t.Error("Expected Stdout to have default value (os.Stdout)")
+				}
+				if app.Stderr == nil {
+					t.Error("Expected Stderr to have default value (os.Stderr)")
+				}
+				if app.exit == nil {
+					t.Error("Expected exit to have default value (os.Exit)")
+				}
+				if app.execLookPath == nil {
+					t.Error("Expected execLookPath to have default value (exec.LookPath)")
+				}
+				if app.isRepository == nil {
+					t.Error("Expected isRepository to have default value (git.IsRepository)")
+				}
+			},
+		},
+		"AppShowVersion": {
+			setupFunc: func(t *testing.T) *App {
+				versionInfo := config.VersionInfo{
+					Version: "test",
+					Commit:  "abc123",
+					Date:    "2023-01-01",
+				}
+
+				var stdout bytes.Buffer
+				tmpDir := t.TempDir()
+
+				mockExit := &mockExit{}
+
+				cfg := config.New()
+				cfg.VersionInfo = versionInfo
+				cfg.RepoPath = tmpDir
+
+				app := NewApp(AppOptions{
+					Config: cfg,
+					Stdout: &stdout,
+					Exit:   mockExit.Exit,
+				})
+
+				return app
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, app *App) {
+				var stdout bytes.Buffer
+				app.Stdout = &stdout
+
+				app.ShowVersion()
+
+				expected := "gitbak test (abc123) built on 2023-01-01\n"
+				if stdout.String() != expected {
+					t.Errorf("Expected output %q, got %q", expected, stdout.String())
+				}
+			},
+		},
+		"AppShowLogo": {
+			setupFunc: func(t *testing.T) *App {
+				var stdout bytes.Buffer
+				tmpDir := t.TempDir()
+
+				cfg := config.New()
+				cfg.VersionInfo = config.VersionInfo{}
+				cfg.RepoPath = tmpDir
+
+				app := NewApp(AppOptions{
+					Config: cfg,
+					Stdout: &stdout,
+				})
+
+				return app
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, app *App) {
+				var stdout bytes.Buffer
+				app.Stdout = &stdout
+
+				app.ShowLogo()
+
+				output := stdout.String()
+				if !bytes.Contains([]byte(output), []byte("Automatic Commit Safety Net")) {
+					t.Errorf("Logo output does not contain expected tagline: %s", output)
+				}
+			},
+		},
+		"AppCheckRequiredCommandsSuccess": {
+			setupFunc: func(t *testing.T) *App {
+				mockLookPath := &mockExecLookPath{
+					lookupMap: map[string]string{
+						"git":    "/usr/bin/git",
+						"grep":   "/usr/bin/grep",
+						"sed":    "/usr/bin/sed",
+						"shasum": "/usr/bin/shasum",
+					},
+					lookupErr: map[string]error{},
+				}
+
+				tmpDir := t.TempDir()
+				cfg := config.New()
+				cfg.RepoPath = tmpDir
+
+				app := NewApp(AppOptions{
+					Config:       cfg,
+					ExecLookPath: mockLookPath.LookPath,
+				})
+
+				return app
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, app *App) {
+				err := app.checkRequiredCommands()
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			},
+		},
+		"AppCheckRequiredCommandsFailure": {
+			setupFunc: func(t *testing.T) *App {
+				mockLookPath := &mockExecLookPath{
+					lookupMap: map[string]string{
+						"grep":   "/usr/bin/grep",
+						"sed":    "/usr/bin/sed",
+						"shasum": "/usr/bin/shasum",
+					},
+					lookupErr: map[string]error{
+						"git": fmt.Errorf("command not found"),
+					},
+				}
+
+				tmpDir := t.TempDir()
+				cfg := config.New()
+				cfg.RepoPath = tmpDir
+
+				app := NewApp(AppOptions{
+					Config:       cfg,
+					ExecLookPath: mockLookPath.LookPath,
+				})
+
+				return app
+			},
+			expectError:   true,
+			errorContains: "git is not found in PATH",
+			validateFunc: func(t *testing.T, app *App) {
+				err := app.checkRequiredCommands()
+				if err == nil {
+					t.Error("Expected error when git is missing, got nil")
+				}
+			},
+		},
+		"RepositoryDetectionError": {
+			setupFunc: func(t *testing.T) *App {
+				app := NewTestApp()
+				mockLogger := &MockLogger{}
+				app = WithMockLogger(app, mockLogger)
+
+				tmpDir := t.TempDir()
+				app.Config.RepoPath = tmpDir
+
+				testErr := gitbakErrors.New("simulated repository detection error")
+				app = WithIsRepository(app, func(path string) (bool, error) {
+					return false, testErr
+				})
+
+				return app
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, app *App) {
+				mockLogger := app.Logger.(*MockLogger)
+
+				ctx := context.Background()
+				err := app.Run(ctx)
+
+				if err == nil {
+					t.Error("Expected Run to return an error, got nil")
+				}
+
+				if !gitbakErrors.Is(err, gitbakErrors.ErrGitOperationFailed) {
+					t.Errorf("Expected error to be wrapped with ErrGitOperationFailed, got: %v", err)
+				}
+
+				if !mockLogger.WarningCalled {
+					t.Error("Expected warning to be logged")
+				}
+			},
+		},
+		"NonRepositoryPath": {
+			setupFunc: func(t *testing.T) *App {
+				app := NewTestApp()
+				mockLogger := &MockLogger{}
+				app = WithMockLogger(app, mockLogger)
+
+				tmpDir := t.TempDir()
+				app.Config.RepoPath = tmpDir
+
+				app = WithIsRepository(app, func(path string) (bool, error) {
+					return false, nil // Path is not a repository, but no error
+				})
+
+				return app
+			},
+			expectError: true,
+			validateFunc: func(t *testing.T, app *App) {
+				ctx := context.Background()
+				err := app.Run(ctx)
+
+				if err == nil {
+					t.Error("Expected Run to return an error for non-repository path")
+				}
+
+				if !gitbakErrors.Is(err, gitbakErrors.ErrNotGitRepository) {
+					t.Errorf("Expected error %v, got %v", gitbakErrors.ErrNotGitRepository, err)
+				}
+			},
+		},
 	}
 
-	app := NewApp(AppOptions{
-		Config:       config.New(),
-		ExecLookPath: mockLookPath.LookPath,
-	})
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			app := test.setupFunc(t)
 
-	err := app.checkRequiredCommands()
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
+			if app.isRepository == nil {
+				app = WithSimpleIsRepository(app, func(path string) bool {
+					return true
+				})
+			}
 
-	mockLookPath.lookupMap = map[string]string{
-		"grep":   "/usr/bin/grep",
-		"sed":    "/usr/bin/sed",
-		"shasum": "/usr/bin/shasum",
-	}
-	mockLookPath.lookupErr = map[string]error{
-		"git": fmt.Errorf("command not found"),
-	}
+			if app.Config.RepoPath != "" {
+				if _, err := os.Stat(app.Config.RepoPath); os.IsNotExist(err) {
+					newTmpDir := t.TempDir()
+					t.Logf("Warning: Test repo path %s doesn't exist, using %s instead",
+						app.Config.RepoPath, newTmpDir)
+					app.Config.RepoPath = newTmpDir
+				}
+			} else {
+				app.Config.RepoPath = t.TempDir()
+			}
 
-	app = NewApp(AppOptions{
-		Config:       config.New(),
-		ExecLookPath: mockLookPath.LookPath,
-	})
-
-	err = app.checkRequiredCommands()
-	if err == nil {
-		t.Error("Expected error when git is missing, got nil")
+			if test.validateFunc != nil {
+				test.validateFunc(t, app)
+			}
+		})
 	}
 }
 
+// TestRunWithLogoFlag tests running the app with the logo flag
 func TestRunWithLogoFlag(t *testing.T) {
 	var stdout, stderr bytes.Buffer
+	tmpDir := t.TempDir()
+
+	dummyFile := filepath.Join(tmpDir, "fake.txt")
+	if err := os.WriteFile(dummyFile, []byte("fake content"), 0644); err != nil {
+		t.Logf("Warning: Failed to create fake file: %v", err)
+	}
 
 	cfg := config.New()
 	cfg.ShowLogo = true
+	cfg.RepoPath = tmpDir
 
 	app := NewApp(AppOptions{
 		Config: cfg,
 		Stdout: &stdout,
 		Stderr: &stderr,
 	})
+
+	app = WithSimpleIsRepository(app, func(path string) bool {
+		return true
+	})
+
+	if err := app.Initialize(); err != nil {
+		t.Logf("Warning: Failed to initialize app: %v", err)
+	}
 
 	ctx := context.Background()
 	err := app.Run(ctx)
@@ -192,10 +398,13 @@ func TestRunWithLogoFlag(t *testing.T) {
 
 // TestCleanupOnSignal provides comprehensive test coverage for the CleanupOnSignal method
 func TestCleanupOnSignal(t *testing.T) {
-	// Test 1: All components are nil (most basic case)
 	t.Run("All components nil", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := config.New()
+		cfg.RepoPath = tmpDir
+
 		app := NewApp(AppOptions{
-			Config: config.New(),
+			Config: cfg,
 			Locker: nil,
 			Gitbak: nil,
 			Logger: nil,
@@ -205,12 +414,15 @@ func TestCleanupOnSignal(t *testing.T) {
 		// No assertions - we're just making sure it doesn't panic
 	})
 
-	// Test 2: Only Gitbak is present
-	t.Run("Only Gitbak present", func(t *testing.T) {
+	t.Run("Only gitbak present", func(t *testing.T) {
 		mockGitbak := &MockGitbaker{}
+		tmpDir := t.TempDir()
+
+		cfg := config.New()
+		cfg.RepoPath = tmpDir
 
 		app := NewApp(AppOptions{
-			Config: config.New(),
+			Config: cfg,
 			Gitbak: mockGitbak,
 			Locker: nil,
 			Logger: nil,
@@ -223,12 +435,15 @@ func TestCleanupOnSignal(t *testing.T) {
 		}
 	})
 
-	// Test 3: Locker with success
 	t.Run("Locker with success", func(t *testing.T) {
 		mockLocker := &MockLocker{ReleaseErr: nil}
+		tmpDir := t.TempDir()
+
+		cfg := config.New()
+		cfg.RepoPath = tmpDir
 
 		app := NewApp(AppOptions{
-			Config: config.New(),
+			Config: cfg,
 			Locker: mockLocker,
 			Gitbak: nil,
 			Logger: nil,
@@ -241,25 +456,18 @@ func TestCleanupOnSignal(t *testing.T) {
 		}
 	})
 
-	// Test 4: Locker with error and Logger
 	t.Run("Locker with error and Logger", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "gitbak-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer func() {
-			if err := os.RemoveAll(tempDir); err != nil {
-				t.Logf("Failed to remove temp directory: %v", err)
-			}
-		}()
-
+		tempDir := t.TempDir()
 		logFile := filepath.Join(tempDir, "test.log")
 
 		mockLocker := &MockLocker{ReleaseErr: fmt.Errorf("test error")}
 		testLogger := logger.New(true, logFile, true)
 
+		cfg := config.New()
+		cfg.RepoPath = tempDir
+
 		app := NewApp(AppOptions{
-			Config: config.New(),
+			Config: cfg,
 			Locker: mockLocker,
 			Logger: testLogger,
 		})
@@ -280,14 +488,17 @@ func TestCleanupOnSignal(t *testing.T) {
 		}
 	})
 
-	// Test 5: Locker with error but no Logger (stderr output)
 	t.Run("Locker with error but no Logger", func(t *testing.T) {
 		mockLocker := &MockLocker{ReleaseErr: fmt.Errorf("test error")}
+		tmpDir := t.TempDir()
 
 		var buf bytes.Buffer
 
+		cfg := config.New()
+		cfg.RepoPath = tmpDir
+
 		app := NewApp(AppOptions{
-			Config: config.New(),
+			Config: cfg,
 			Locker: mockLocker,
 			Logger: nil,
 			Stderr: &buf,
@@ -304,24 +515,18 @@ func TestCleanupOnSignal(t *testing.T) {
 		}
 	})
 
-	// Test 6: All components present
 	t.Run("All components present", func(t *testing.T) {
-		tempDir, err := os.MkdirTemp("", "gitbak-test-*")
-		if err != nil {
-			t.Fatalf("Failed to create temp directory: %v", err)
-		}
-		defer func() {
-			if err := os.RemoveAll(tempDir); err != nil {
-				t.Logf("Failed to remove temp directory: %v", err)
-			}
-		}()
+		tempDir := t.TempDir()
 
 		mockGitbak := &MockGitbaker{}
 		mockLocker := &MockLocker{ReleaseErr: nil}
 		testLogger := logger.New(true, filepath.Join(tempDir, "test.log"), true)
 
+		cfg := config.New()
+		cfg.RepoPath = tempDir
+
 		app := NewApp(AppOptions{
-			Config: config.New(),
+			Config: cfg,
 			Gitbak: mockGitbak,
 			Locker: mockLocker,
 			Logger: testLogger,

@@ -6,10 +6,80 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
-// Logger provides structured logging capability
-type Logger struct {
+// Logger defines the common logging interface used throughout the application.
+// It provides a standardized way to emit log messages at different levels of importance,
+// with a clear separation between internal (debug) logs and user-facing messages.
+//
+// The interface is designed to handle both internal logging needs (Info, Warning, Error)
+// and user communication (InfoToUser, WarningToUser, Success, StatusMessage).
+type Logger interface {
+	// Private logging methods (typically written only to log file)
+
+	// Info logs an informational message for debugging purposes.
+	// These messages are typically only written to log files and are not shown to users
+	// unless verbose mode is enabled.
+	//
+	// The format string follows fmt.Printf style formatting.
+	Info(format string, args ...interface{})
+
+	// Warning logs a warning message for debugging purposes.
+	// These messages indicate potential issues that are not critical failures.
+	// They are typically only written to log files and are not shown to users
+	// unless verbose mode is enabled.
+	//
+	// The format string follows fmt.Printf style formatting.
+	Warning(format string, args ...interface{})
+
+	// Error logs an error message for debugging purposes.
+	// These messages indicate operational failures or errors that occurred
+	// during program execution. They are typically written to log files and
+	// may also be shown to users depending on the logger implementation.
+	//
+	// The format string follows fmt.Printf style formatting.
+	Error(format string, args ...interface{})
+
+	// User-facing logging methods (typically written to both file and stdout)
+
+	// InfoToUser logs an informational message intended for users.
+	// These messages are always shown to users regardless of verbose settings,
+	// and are also written to log files.
+	//
+	// The format string follows fmt.Printf style formatting.
+	InfoToUser(format string, args ...interface{})
+
+	// WarningToUser logs a warning message intended for users.
+	// These messages highlight important issues that users should be aware of,
+	// and are always shown regardless of verbose settings.
+	//
+	// The format string follows fmt.Printf style formatting.
+	WarningToUser(format string, args ...interface{})
+
+	// Success logs a success message to the user.
+	// These messages indicate successful completion of operations and are
+	// typically styled differently (e.g., green text) to stand out.
+	//
+	// The format string follows fmt.Printf style formatting.
+	Success(format string, args ...interface{})
+
+	// StatusMessage logs a status message to the user.
+	// These messages provide information about the current state of the application
+	// and are always shown to users. They are typically used for displaying
+	// configuration information, progress updates, and other operational status.
+	//
+	// The format string follows fmt.Printf style formatting.
+	StatusMessage(format string, args ...interface{})
+
+	// Close ensures any buffered data is written and closes open log file handles.
+	// This should be called before the application exits to ensure all logs are properly saved.
+	Close() error
+}
+
+// DefaultLogger provides structured logging capability and implements the Logger interface
+type DefaultLogger struct {
+	mu      sync.Mutex
 	logger  *slog.Logger
 	enabled bool
 	logFile string
@@ -20,12 +90,12 @@ type Logger struct {
 }
 
 // New creates a new Logger instance
-func New(enabled bool, logFile string, verbose bool) *Logger {
+func New(enabled bool, logFile string, verbose bool) Logger {
 	return NewWithOutput(enabled, logFile, verbose, os.Stdout, os.Stderr)
 }
 
-// NewWithOutput creates a Logger with custom output writers
-func NewWithOutput(enabled bool, logFile string, verbose bool, stdout, stderr io.Writer) *Logger {
+// NewWithOutput creates a DefaultLogger with custom output writers
+func NewWithOutput(enabled bool, logFile string, verbose bool, stdout, stderr io.Writer) *DefaultLogger {
 	var logger *slog.Logger
 
 	opts := &slog.HandlerOptions{
@@ -61,7 +131,7 @@ func NewWithOutput(enabled bool, logFile string, verbose bool, stdout, stderr io
 		logger = slog.New(slog.NewTextHandler(stderr, opts))
 	}
 
-	return &Logger{
+	return &DefaultLogger{
 		logger:  logger,
 		enabled: enabled,
 		logFile: logFile,
@@ -73,7 +143,10 @@ func NewWithOutput(enabled bool, logFile string, verbose bool, stdout, stderr io
 }
 
 // Info logs an informational message (file only)
-func (l *Logger) Info(format string, args ...interface{}) {
+func (l *DefaultLogger) Info(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	if !l.enabled {
 		return
 	}
@@ -83,7 +156,10 @@ func (l *Logger) Info(format string, args ...interface{}) {
 }
 
 // InfoToUser logs an informational message to both file and stdout
-func (l *Logger) InfoToUser(format string, args ...interface{}) {
+func (l *DefaultLogger) InfoToUser(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	msg := fmt.Sprintf(format, args...)
 
 	if l.enabled {
@@ -94,7 +170,10 @@ func (l *Logger) InfoToUser(format string, args ...interface{}) {
 }
 
 // Success logs a success message to both file and stdout
-func (l *Logger) Success(format string, args ...interface{}) {
+func (l *DefaultLogger) Success(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	msg := fmt.Sprintf(format, args...)
 
 	if l.enabled {
@@ -105,7 +184,10 @@ func (l *Logger) Success(format string, args ...interface{}) {
 }
 
 // Warning logs a warning message
-func (l *Logger) Warning(format string, args ...interface{}) {
+func (l *DefaultLogger) Warning(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	msg := fmt.Sprintf(format, args...)
 
 	if l.enabled {
@@ -120,7 +202,10 @@ func (l *Logger) Warning(format string, args ...interface{}) {
 }
 
 // WarningToUser logs a warning message to both file and stdout
-func (l *Logger) WarningToUser(format string, args ...interface{}) {
+func (l *DefaultLogger) WarningToUser(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	msg := fmt.Sprintf(format, args...)
 
 	if l.enabled {
@@ -131,7 +216,10 @@ func (l *Logger) WarningToUser(format string, args ...interface{}) {
 }
 
 // Error logs an error message
-func (l *Logger) Error(format string, args ...interface{}) {
+func (l *DefaultLogger) Error(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	msg := fmt.Sprintf(format, args...)
 
 	if l.enabled {
@@ -143,13 +231,19 @@ func (l *Logger) Error(format string, args ...interface{}) {
 }
 
 // StatusMessage prints a status message to stdout only (no logging)
-func (l *Logger) StatusMessage(format string, args ...interface{}) {
+func (l *DefaultLogger) StatusMessage(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	msg := fmt.Sprintf(format, args...)
 	_, _ = fmt.Fprintln(l.stdout, msg)
 }
 
 // Close ensures any buffered data is written and closes open log file handles
-func (l *Logger) Close() error {
+func (l *DefaultLogger) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	if l.file != nil {
 		// Sync ensures any buffered data is flushed to disk before closing
 		if err := l.file.Sync(); err != nil {
@@ -158,4 +252,22 @@ func (l *Logger) Close() error {
 		return l.file.Close()
 	}
 	return nil
+}
+
+// SetStdout sets a custom writer for user-facing stdout messages only.
+// NOTE: This does not affect where structured log messages from slog are directed.
+// This method is thread-safe and is primarily intended for testing.
+func (l *DefaultLogger) SetStdout(w io.Writer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.stdout = w
+}
+
+// SetStderr sets a custom writer for user-facing stderr messages only.
+// NOTE: This does not affect where structured log messages from slog are directed.
+// This method is thread-safe and is primarily intended for testing.
+func (l *DefaultLogger) SetStderr(w io.Writer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.stderr = w
 }

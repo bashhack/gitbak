@@ -72,8 +72,8 @@ func TestCommitNumberingAndContinue(t *testing.T) {
 			t.Fatalf("Failed to kill gitbak process: %v", err)
 		}
 
-		t.Logf("Gitbak STDOUT: %s", stdoutBuf.String())
-		t.Logf("Gitbak STDERR: %s", stderrBuf.String())
+		t.Logf("gitbak STDOUT: %s", stdoutBuf.String())
+		t.Logf("gitbak STDERR: %s", stderrBuf.String())
 
 		gitCmd := exec.Command("git", "-C", repoPath, "log", "--pretty=%s")
 		output, err := gitCmd.Output()
@@ -228,7 +228,7 @@ func buildGitbak(t *testing.T) string {
 
 	gitbakBin := filepath.Join("..", "..", "build", "gitbak")
 	if _, err := os.Stat(gitbakBin); os.IsNotExist(err) {
-		buildCmd := exec.Command("go", "build", "-tags=testing", "-o", gitbakBin, "../../cmd/gitbak")
+		buildCmd := exec.Command("go", "build", "-tags=test", "-o", gitbakBin, "../../cmd/gitbak")
 		if err := buildCmd.Run(); err != nil {
 			t.Fatalf("Failed to build gitbak binary: %v", err)
 		}
