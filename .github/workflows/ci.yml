@@ -84,31 +84,10 @@ jobs:
           if-no-files-found: error
 
 
-  update-pkg-go-dev:
-    name: Update pkg.go.dev Documentation
-    runs-on: ubuntu-latest
-    needs: [test-go]
-    if: github.ref_type == 'tag' # Only run when a tag is pushed
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-
-      - name: Trigger pkg.go.dev update
-        run: |
-          # This makes a request to pkg.go.dev to trigger a refresh of the documentation
-          # Using the tag that was just pushed
-          echo "Triggering pkg.go.dev to refresh for tag: ${{ github.ref_name }}"
-          curl -sSL "https://proxy.golang.org/github.com/bashhack/gitbak/@v/${{ github.ref_name }}.info"
-
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [test-go, update-pkg-go-dev]
+    needs: [test-go]
     if: github.ref_type == 'tag'
 
     # Note: This job requires a 'RELEASE_TOKEN' secret (a personal access token with 'repo' permissions)
