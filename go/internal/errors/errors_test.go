@@ -127,6 +127,24 @@ func TestErrorCases(t *testing.T) {
 			t.Errorf("Expected error message %q, got %q", expected, err.Error())
 		}
 	})
+
+	t.Run("ErrInvalidFlag for invalid flags", func(t *testing.T) {
+		err := Wrap(ErrInvalidFlag, "flag provided but not defined: -z")
+
+		if !Is(err, ErrInvalidFlag) {
+			t.Errorf("Expected wrapped error to match ErrInvalidFlag, but it didn't")
+		}
+
+		expected := "flag provided but not defined: -z: invalid flag"
+		if err.Error() != expected {
+			t.Errorf("Expected error message %q, got %q", expected, err.Error())
+		}
+
+		configErr := NewConfigError("flags", nil, err)
+		if !Is(configErr, ErrInvalidFlag) {
+			t.Errorf("Expected ConfigError to be matchable with ErrInvalidFlag, but it wasn't")
+		}
+	})
 }
 
 func ExampleWrap() {

@@ -21,6 +21,9 @@ var (
 
 	// ErrInvalidConfiguration indicates an invalid or conflicting user configuration
 	ErrInvalidConfiguration = errors.New("invalid configuration")
+
+	// ErrInvalidFlag indicates an invalid command-line flag was provided
+	ErrInvalidFlag = errors.New("invalid flag")
 )
 
 // New creates a new error with the given message.

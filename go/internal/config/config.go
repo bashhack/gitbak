@@ -290,7 +290,7 @@ func printFlagIfExists(w io.Writer, fs *flag.FlagSet, name string) {
 // ParseFlags parses the command-line arguments and updates the config
 func (c *Config) ParseFlags() error {
 	for _, arg := range os.Args[1:] {
-		if arg == "--help" || arg == "-help" {
+		if arg == "--help" || arg == "-help" || arg == "-h" || arg == "--h" {
 			// Create a fake FlagSet to set up flags for help display
 			fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 			c.SetupFlags(fs)
@@ -300,7 +300,23 @@ func (c *Config) ParseFlags() error {
 		}
 	}
 
+	// Create a flag set with custom error handling to suppress
+	// the initial error message from flag package
 	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+
+	// Redirect stderr temporarily to capture and discard the flag parse error message
+	oldStderr := os.Stderr
+	_, w, _ := os.Pipe()
+	os.Stderr = w
+	defer func() {
+		if err := w.Close(); err != nil {
+			_, _ = fmt.Fprintf(oldStderr, "Error closing pipe: %v\n", err)
+		}
+		os.Stderr = oldStderr
+	}()
+
+	// Prevent default flag usage output
+	fs.Usage = func() {}
 
 	c.SetupFlags(fs)
 
@@ -313,7 +329,14 @@ func (c *Config) ParseFlags() error {
 	}
 
 	if err := fs.Parse(appArgs); err != nil {
-		return gitbakErrors.NewConfigError("flags", nil, gitbakErrors.Wrap(err, "failed to parse command-line arguments"))
+		helpFS := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+		c.SetupFlags(helpFS)
+
+		fmt.Printf("Error: %s\n\n", err)
+
+		c.PrintUsage(helpFS, os.Stdout)
+
+		return gitbakErrors.NewConfigError("flags", nil, gitbakErrors.Wrap(gitbakErrors.ErrInvalidFlag, err.Error()))
 	}
 
 	// Apply inverted flags only after successful parsing
