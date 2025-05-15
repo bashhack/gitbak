@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
 )
 
 // Locker prevents concurrent gitbak instances using file locks

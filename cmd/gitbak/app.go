@@ -8,12 +8,12 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bashhack/gitbak/internal/config"
-	"github.com/bashhack/gitbak/internal/constants"
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
-	"github.com/bashhack/gitbak/internal/git"
-	"github.com/bashhack/gitbak/internal/lock"
-	"github.com/bashhack/gitbak/internal/logger"
+	"github.com/bashhack/gitbak/pkg/config"
+	"github.com/bashhack/gitbak/pkg/constants"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
+	"github.com/bashhack/gitbak/pkg/git"
+	"github.com/bashhack/gitbak/pkg/lock"
+	"github.com/bashhack/gitbak/pkg/logger"
 )
 
 // Gitbaker performs Git operations

@@ -3,7 +3,7 @@ package git
 import (
 	"context"
 	"fmt"
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
 	"os/exec"
 )
 

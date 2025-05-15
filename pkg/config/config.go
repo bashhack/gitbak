@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
 )
 
 const (

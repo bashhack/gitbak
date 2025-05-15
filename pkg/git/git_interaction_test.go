@@ -2,7 +2,7 @@ package git
 
 import (
 	"bytes"
-	"github.com/bashhack/gitbak/internal/logger"
+	"github.com/bashhack/gitbak/pkg/logger"
 	"io"
 	"path/filepath"
 	"testing"

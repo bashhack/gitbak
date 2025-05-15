@@ -13,7 +13,7 @@
 //
 // The constants in this package can be imported and used directly:
 //
-//	import "github.com/bashhack/gitbak/internal/constants"
+//	import "github.com/bashhack/gitbak/pkg/constants"
 //
 //	func displayLogo() {
 //	    fmt.Println(constants.Logo)

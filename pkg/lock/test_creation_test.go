@@ -1,7 +1,7 @@
 package lock
 
 import (
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
 	"os"
 	"path/filepath"
 	"strconv"

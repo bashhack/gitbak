@@ -3,7 +3,7 @@ package git
 import (
 	"context"
 	"fmt"
-	"github.com/bashhack/gitbak/internal/logger"
+	"github.com/bashhack/gitbak/pkg/logger"
 	"os"
 	"os/exec"
 	"path/filepath"

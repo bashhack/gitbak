@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
 )
 
 // Helper function to check for environment variable errors

@@ -30,25 +30,27 @@
 //
 // # Documentation Structure
 //
-// The gitbak documentation is organized into several sections:
+// The gitbak GitHub repository README can be found at:
+//   - Github Readme: https://github.com/bashhack/gitbak/blob/main/README.md
 //
-//   - Command Documentation: https://pkg.go.dev/github.com/bashhack/gitbak/go/cmd/gitbak
-//   - Usage & Configuration: https://github.com/bashhack/gitbak/blob/main/go/docs/USAGE_AND_CONFIGURATION.md
-//   - After Session Guide: https://github.com/bashhack/gitbak/blob/main/go/docs/AFTER_SESSION.md
-//   - IDE Integration: https://github.com/bashhack/gitbak/blob/main/go/docs/IDE_INTEGRATION.md
-//   - Comparison with Alternatives: https://github.com/bashhack/gitbak/blob/main/go/docs/COMPARISON.md
+// Additional documentation is organized into several sections:
+//
+//   - Usage & Configuration: https://github.com/bashhack/gitbak/blob/main/docs/USAGE_AND_CONFIGURATION.md
+//   - After Session Guide: https://github.com/bashhack/gitbak/blob/main/docs/AFTER_SESSION.md
+//   - IDE Integration: https://github.com/bashhack/gitbak/blob/main/docs/IDE_INTEGRATION.md
+//   - Comparison with Alternatives: https://github.com/bashhack/gitbak/blob/main/docs/COMPARISON.md
 //
 // # Module Structure
 //
 // The module is organized into these packages:
 //
 //   - cmd/gitbak: Command-line interface
-//   - internal/git: Git operations and commit logic
-//   - internal/config: Configuration and flag parsing
-//   - internal/lock: File-based locking mechanism
-//   - internal/logger: Logging facilities
-//   - internal/errors: Error handling utilities
-//   - internal/constants: ASCII art and fixed values
+//   - pkg/git: Git operations and commit logic
+//   - pkg/config: Configuration and flag parsing
+//   - pkg/lock: File-based locking mechanism
+//   - pkg/logger: Logging facilities
+//   - pkg/errors: Error handling utilities
+//   - pkg/constants: ASCII art and fixed values
 //
 // # Common Configuration Options
 //

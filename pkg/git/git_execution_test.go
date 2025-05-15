@@ -3,8 +3,8 @@ package git
 import (
 	"context"
 	"fmt"
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
-	"github.com/bashhack/gitbak/internal/logger"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
+	"github.com/bashhack/gitbak/pkg/logger"
 	"os"
 	"os/exec"
 	"path/filepath"

@@ -7,6 +7,7 @@
 [![Tests](https://github.com/bashhack/gitbak/actions/workflows/ci.yml/badge.svg)](https://github.com/bashhack/gitbak/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/bashhack/gitbak/graph/badge.svg?token=Y3K7R3MHXH)](https://codecov.io/gh/bashhack/gitbak)
 [![Go Reference](https://pkg.go.dev/badge/github.com/bashhack/gitbak)](https://pkg.go.dev/github.com/bashhack/gitbak)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bashhack/gitbak)](https://goreportcard.com/report/github.com/bashhack/gitbak)
 ![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/bashhack/gitbak?utm_source=oss&utm_medium=github&utm_campaign=bashhack%2Fgitbak&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 </div>
@@ -150,7 +151,7 @@ make test
 ./scripts/test-all.sh
 
 # Test specific packages in Ubuntu container
-./scripts/ubuntu-test.sh ./internal/lock/...
+./scripts/ubuntu-test.sh ./pkg/lock/...
 
 # Build for development
 make build

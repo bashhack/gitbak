@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bashhack/gitbak/internal/config"
+	"github.com/bashhack/gitbak/pkg/config"
 )
 
 // TestAppRunWithVariousFlagCombinations tests how the app handles different command line flag combinations
