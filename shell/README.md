@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="/assets/gitbak_retro_logo.png" alt="gitbak logo" width="300">
+  <img src="https://raw.githubusercontent.com/bashhack/gitbak/main/assets/gitbak_retro_logo.png" alt="gitbak logo" width="300">
 </p>
 
 # gitbak (Shell Script Version)
 
-> ⚠️ **IMPORTANT**: This shell script implementation is **UNSUPPORTED** and maintained only for historical purposes. For production use, please use the [Go implementation](/go/README.md) which provides better reliability, performance, and ongoing support.
+> ⚠️ **IMPORTANT**: This shell script implementation is **UNSUPPORTED** and maintained only for historical purposes. For production use, please use the [Go implementation](../README.md) which provides better reliability, performance, and ongoing support.
 
 A lightweight shell script that automatically commits changes at regular intervals, providing a safety net during programming sessions.
 
@@ -67,13 +67,13 @@ The shell script version of gitbak is designed to be highly portable, working ac
 
 2. Install using the Makefile:
    ```bash
-   cd gitbak/sh
+   cd gitbak/shell
    make install
    ```
 
 3. Or manually copy the script:
    ```bash
-   cp gitbak/sh/gitbak.sh ~/.local/bin/gitbak
+   cp gitbak/shell/gitbak.sh ~/.local/bin/gitbak
    chmod +x ~/.local/bin/gitbak
    ```
 
@@ -144,7 +144,7 @@ The script is designed to work with a variety of shell environments:
 To verify compatibility with your specific shell, run the shell compatibility test:
 
 ```bash
-cd /path/to/gitbak/sh/tests
+cd /path/to/gitbak/shell/tests
 ./shell_compatibility.sh
 ```
 
@@ -180,7 +180,7 @@ Benefits of this approach:
 
 This gives you the best of both worlds: meaningful commit history AND comprehensive safety.
 
-> 💡 See [Comparison with Alternatives](/go/docs/COMPARISON.md) for why this approach is superior to IDE auto-save features.
+> 💡 See [Comparison with Alternatives](../docs/COMPARISON.md) for why this approach is superior to IDE auto-save features.
 
 ## After Your Session
 
@@ -212,7 +212,7 @@ If you encounter issues:
 
 1. Run the script with `set -x` to see debug output:
    ```bash
-   bash -x /path/to/gitbak/sh/gitbak.sh
+   bash -x /path/to/gitbak/shell/gitbak.sh
    ```
 
 2. Check for common issues:
@@ -230,7 +230,7 @@ Compared to the Go version, the shell script has a few limitations:
 - Less robust error handling and recovery
 - Simpler locking mechanism
 
-For a more robust, cross-platform implementation with additional features, consider using the [Go version](/go/README.md).
+For a more robust, cross-platform implementation with additional features, consider using the [Go version](../README.md).
 
 ## Testing
 
@@ -238,7 +238,7 @@ The shell script version includes a comprehensive test suite:
 
 ```bash
 # Run all tests
-cd /path/to/gitbak/sh/tests
+cd /path/to/gitbak/shell/tests
 ./run_tests.sh
 
 # Run specific tests

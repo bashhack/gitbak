@@ -1,7 +1,7 @@
 # Build artifacts
-go/build/
-go/gitbak
-go/dist/
+build/
+dist/
+gitbak
 
 # Test artifacts
 coverage.txt
@@ -9,7 +9,7 @@ coverage.out
 coverage.html
 
 # Dependency directories
-go/vendor/
+vendor/
 
 # Emacs specific files
 *~
@@ -62,4 +62,4 @@ Icon?
 *~
 
 # Generated files during development
-/tmp/
+/tmp/build/

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e  # Exit immediately if any command fails
 
 echo "Test 1: Basic functionality"

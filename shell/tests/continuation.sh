@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 echo "Test 3: Session continuation"
 
 ORIGINAL_DIR=$(cd "$(dirname "$0")/.." && pwd)

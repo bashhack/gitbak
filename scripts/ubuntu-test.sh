@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ubuntu-test.sh - Run Go tests in Ubuntu Docker container
 #
 # This script runs Go tests in an Ubuntu Docker container to simulate
@@ -12,6 +12,7 @@
 #   ./scripts/ubuntu-test.sh -run=TestSpecific ./pkg/...   # Run specific tests in a package
 
 set -e
+set -o pipefail
 
 # Configuration (can be overridden with environment variables)
 GO_VERSION=${GO_VERSION:-"1.24.0"}

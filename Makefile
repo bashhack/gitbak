@@ -199,19 +199,24 @@ build/optimize:
 	@mkdir -p $(BUILD_DIR)
 	go build -ldflags "$(LDVARS) -s -w" -o $(BUILD_DIR)/$(BINARY_NAME) ./$(CMD_DIR)
 
+## Supported platforms (OS/ARCH combinations)
+PLATFORMS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64
+
 ## build/all: Build for all supported platforms
 .PHONY: build/all
 build/all:
 	@echo "Building for all platforms..."
 	@mkdir -p $(BUILD_DIR)/bin
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/bin/$(BINARY_NAME)-darwin-amd64 ./$(CMD_DIR)
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/bin/$(BINARY_NAME)-darwin-arm64 ./$(CMD_DIR)
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/bin/$(BINARY_NAME)-linux-amd64 ./$(CMD_DIR)
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/bin/$(BINARY_NAME)-linux-arm64 ./$(CMD_DIR)
+	@for p in $(PLATFORMS); do \
+		GOOS=$${p%/*} GOARCH=$${p##*/} \
+		go build -ldflags "$(LDVARS) -s -w" \
+			-o $(BUILD_DIR)/bin/$(BINARY_NAME)-$${p%/*}-$${p##*/} ./$(CMD_DIR); \
+		echo "Built $(BINARY_NAME)-$${p%/*}-$${p##*/}"; \
+	done
 
 ## install: Install to ~/.local/bin
 .PHONY: install
-install: build
+install: build/optimize
 	@echo "📦 Installing $(BINARY_NAME)..."
 	@echo "Installing to ~/.local/bin (standard user location)"
 	@mkdir -p $(HOME)/.local/bin
@@ -269,9 +274,9 @@ publish/gopkg:
 		exit 1; \
 	fi
 	@echo "Triggering go.pkg.dev indexing for version $(VERSION)..."
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on go get github.com/bashhack/gitbak/go@$(VERSION)
+	@GOPROXY=https://proxy.golang.org GO111MODULE=on go get github.com/bashhack/gitbak@$(VERSION)
 	@echo "✅ Triggered indexing for go.pkg.dev"
-	@echo "Note: It may take a few minutes for the package to appear on https://pkg.go.dev/github.com/bashhack/gitbak/go@$(VERSION)"
+	@echo "Note: It may take a few minutes for the package to appear on https://pkg.go.dev/github.com/bashhack/gitbak@$(VERSION)"
 
 # ============================================================================= #
 # DOCUMENTATION

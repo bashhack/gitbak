@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 echo "Test 4: Stress test with rapid commits"
 
 ORIGINAL_DIR=$(cd "$(dirname "$0")/.." && pwd)
