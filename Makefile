@@ -269,9 +269,9 @@ publish/gopkg:
 		exit 1; \
 	fi
 	@echo "Triggering go.pkg.dev indexing for version $(VERSION)..."
-	@GOPROXY=https://proxy.golang.org GO111MODULE=on go get github.com/bashhack/gitbak/go@$(VERSION)
+	@GOPROXY=https://proxy.golang.org GO111MODULE=on go get github.com/bashhack/gitbak@$(VERSION)
 	@echo "✅ Triggered indexing for go.pkg.dev"
-	@echo "Note: It may take a few minutes for the package to appear on https://pkg.go.dev/github.com/bashhack/gitbak/go@$(VERSION)"
+	@echo "Note: It may take a few minutes for the package to appear on https://pkg.go.dev/github.com/bashhack/gitbak@$(VERSION)"
 
 # ============================================================================= #
 # DOCUMENTATION

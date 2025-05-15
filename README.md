@@ -67,7 +67,7 @@ brew install bashhack/gitbak/gitbak
 # Note: Homebrew automatically adds gitbak to your PATH, so it's ready to use immediately
 
 # Option 2: Install using Go (requires Go 1.24+)
-go install github.com/bashhack/gitbak/go/cmd/gitbak@latest
+go install github.com/bashhack/gitbak/cmd/gitbak@latest
 # Note: Ensure your Go bin directory (typically $HOME/go/bin) is in your PATH
 # You can add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):
 # export PATH=$PATH:$HOME/go/bin
@@ -120,11 +120,10 @@ git commit -m "Complete feature implementation"
 
 ## 📚 Documentation
 
-- [Documentation](/go/README.md) - Complete instructions for using gitbak
-- [Usage & Configuration](go/docs/USAGE_AND_CONFIGURATION.md) - Detailed usage instructions with workflow diagrams
-- [After Session Guide](go/docs/AFTER_SESSION.md) - What to do when your session ends
-- [IDE Integration](go/docs/IDE_INTEGRATION.md) - How to integrate with popular editors
-- [Comparison with Alternatives](go/docs/COMPARISON.md) - Why gitbak outshines IDE auto-save features
+- [Usage & Configuration](docs/USAGE_AND_CONFIGURATION.md) - Detailed usage instructions with workflow diagrams
+- [After Session Guide](docs/AFTER_SESSION.md) - What to do when your session ends
+- [IDE Integration](docs/IDE_INTEGRATION.md) - How to integrate with popular editors
+- [Comparison with Alternatives](docs/COMPARISON.md) - Why gitbak outshines IDE auto-save features
 
 ## 📋 Implementation Details
 
