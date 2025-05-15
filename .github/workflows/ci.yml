@@ -73,7 +73,7 @@ jobs:
           export GITBAK_INTEGRATION_TESTS=1
           make test/integration
 
-      - name: Build for all platforms
+      - name: Build optimized binaries for all platforms
         run: make build/all
 
       - name: Upload binaries

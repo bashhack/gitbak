@@ -29,15 +29,15 @@ comment:
   require_changes: no
 
 ignore:
-  - "go/cmd/gitbak/main.go"       # Main entry point
-  - "go/build/**/*"               # Build artifacts
-  - "go/test/**/*"                # Test files
-  - "sh/**/*"                     # Shell script implementation
+  - "cmd/gitbak/main.go"          # Main entry point
+  - "build/**/*"                  # Build artifacts
+  - "test/**/*"                   # Test files
+  - "shell/**/*"                  # Shell script implementation
   - "**/*_test.go"                # Test files (coverage shown in code being tested)
   - ".github/**/*"                # GitHub workflow files
   - "docs/**/*"                   # Documentation
   - "**/*.md"                     # Markdown files
-  - "go/cmd/gitbak/app_test_helpers.go"  # Test helper functions
-  - "go/internal/git/mocks.go"    # Mock implementations
-  - "go/internal/git/test_helpers.go"  # Test helper functions
+  - "cmd/gitbak/app_test_helpers.go"  # Test helper functions
+  - "internal/git/mocks.go"       # Mock implementations
+  - "internal/git/test_helpers.go"  # Test helper functions
   - "**/*test_helpers.go"         # Any other test helper files

@@ -204,14 +204,14 @@ build/optimize:
 build/all:
 	@echo "Building for all platforms..."
 	@mkdir -p $(BUILD_DIR)/bin
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/bin/$(BINARY_NAME)-darwin-amd64 ./$(CMD_DIR)
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/bin/$(BINARY_NAME)-darwin-arm64 ./$(CMD_DIR)
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/bin/$(BINARY_NAME)-linux-amd64 ./$(CMD_DIR)
-	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/bin/$(BINARY_NAME)-linux-arm64 ./$(CMD_DIR)
+	GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDVARS) -s -w" -o $(BUILD_DIR)/bin/$(BINARY_NAME)-darwin-amd64 ./$(CMD_DIR)
+	GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDVARS) -s -w" -o $(BUILD_DIR)/bin/$(BINARY_NAME)-darwin-arm64 ./$(CMD_DIR)
+	GOOS=linux GOARCH=amd64 go build -ldflags "$(LDVARS) -s -w" -o $(BUILD_DIR)/bin/$(BINARY_NAME)-linux-amd64 ./$(CMD_DIR)
+	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDVARS) -s -w" -o $(BUILD_DIR)/bin/$(BINARY_NAME)-linux-arm64 ./$(CMD_DIR)
 
 ## install: Install to ~/.local/bin
 .PHONY: install
-install: build
+install: build/optimize
 	@echo "📦 Installing $(BINARY_NAME)..."
 	@echo "Installing to ~/.local/bin (standard user location)"
 	@mkdir -p $(HOME)/.local/bin
