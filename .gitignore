@@ -2,6 +2,9 @@
 go/build/
 go/gitbak
 go/dist/
+build/
+dist/
+gitbak
 
 # Test artifacts
 coverage.txt
