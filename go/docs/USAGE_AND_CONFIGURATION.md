@@ -82,7 +82,7 @@ gitbak can be configured using:
 | `-log-file`        | `LOG_FILE`           | Path to log file                            | ~/.local/share/gitbak/logs/gitbak-<hash>.log |
 | `-version`         | n/a                  | Print version information and exit          | n/a                    |
 | `-logo`            | n/a                  | Display ASCII logo and exit                 | n/a                    |
-| `-help`            | n/a                  | Display help message and exit               | n/a                    |
+| `-help`/`-h`       | n/a                  | Display help message and exit               | n/a                    |
 
 ## Usage Patterns
 
