@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 echo "Test 2: Lock file functionality"
 
 ORIGINAL_DIR=$(cd "$(dirname "$0")/.." && pwd)

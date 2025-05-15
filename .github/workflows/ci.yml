@@ -16,9 +16,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         go-version: ['1.24']
-    defaults:
-      run:
-        working-directory: .
+    # Repository root is the default working directory
 
     steps:
       - uses: actions/checkout@v4

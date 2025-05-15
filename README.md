@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/bashhack/gitbak/main/assets/gitbak_retro_logo.png" alt="gitbak logo" width="300">
+  <img src="./assets/gitbak_retro_logo.png" alt="gitbak logo" width="300">
 </p>
 
 <div align="center">
