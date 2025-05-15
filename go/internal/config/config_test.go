@@ -289,6 +289,28 @@ func TestParseFlags(t *testing.T) {
 			t.Errorf("Expected error to be ErrInvalidFlag, got: %v", err)
 		}
 	})
+
+	t.Run("Usage printing", func(t *testing.T) {
+		c := New()
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		c.SetupFlags(fs)
+
+		var buf strings.Builder
+		c.PrintUsage(fs, &buf)
+		output := buf.String()
+
+		if !strings.Contains(output, "gitbak: An automatic commit safety net") {
+			t.Errorf("Expected help message to contain 'gitbak: An automatic commit safety net', got: %s", output)
+		}
+
+		if !strings.Contains(output, "Core Options:") {
+			t.Errorf("Expected help message to contain 'Core Options:', got: %s", output)
+		}
+
+		if !strings.Contains(output, "Environment variables:") {
+			t.Errorf("Expected help message to contain 'Environment variables:', got: %s", output)
+		}
+	})
 }
 
 func TestFinalize(t *testing.T) {
