@@ -2,11 +2,14 @@ package config
 
 import (
 	"flag"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
 )
 
 // Helper function to check for environment variable errors
@@ -241,6 +244,71 @@ func TestParseFlags(t *testing.T) {
 		err := fs.Parse(invalidArgs[1:])
 		if err == nil {
 			t.Errorf("Expected error for invalid interval, got nil")
+		}
+	})
+
+	t.Run("Invalid flag", func(t *testing.T) {
+		originalArgs := os.Args
+		originalStdout := os.Stdout
+
+		defer func() {
+			os.Args = originalArgs
+			os.Stdout = originalStdout
+		}()
+
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		os.Args = []string{"gitbak", "-invalid-flag"}
+
+		c := New()
+		err := c.ParseFlags()
+
+		if err := w.Close(); err != nil {
+			t.Errorf("Error closing pipe: %v", err)
+		}
+		os.Stdout = originalStdout
+
+		var buf strings.Builder
+		_, _ = io.Copy(&buf, r)
+		output := buf.String()
+
+		if err == nil {
+			t.Errorf("Expected error for invalid flag, got nil")
+		}
+
+		if !strings.Contains(output, "Error:") {
+			t.Errorf("Expected error output to contain custom output 'Error:', got: %s", output)
+		}
+
+		if !strings.Contains(output, "gitbak: An automatic commit safety net") {
+			t.Errorf("Expected custom help format with 'gitbak: An automatic commit safety net', got: %s", output)
+		}
+
+		if !gitbakErrors.Is(err, gitbakErrors.ErrInvalidFlag) {
+			t.Errorf("Expected error to be ErrInvalidFlag, got: %v", err)
+		}
+	})
+
+	t.Run("Usage printing", func(t *testing.T) {
+		c := New()
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		c.SetupFlags(fs)
+
+		var buf strings.Builder
+		c.PrintUsage(fs, &buf)
+		output := buf.String()
+
+		if !strings.Contains(output, "gitbak: An automatic commit safety net") {
+			t.Errorf("Expected help message to contain 'gitbak: An automatic commit safety net', got: %s", output)
+		}
+
+		if !strings.Contains(output, "Core Options:") {
+			t.Errorf("Expected help message to contain 'Core Options:', got: %s", output)
+		}
+
+		if !strings.Contains(output, "Environment variables:") {
+			t.Errorf("Expected help message to contain 'Environment variables:', got: %s", output)
 		}
 	})
 }

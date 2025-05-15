@@ -28,7 +28,7 @@ func main() {
 	app := NewDefaultApp(versionInfo)
 
 	if err := app.Config.ParseFlags(); err != nil {
-		_, _ = fmt.Fprintf(app.Stderr, "❌ Error: %v\n", err)
+		// Error and help messages are already displayed in ParseFlags
 		app.exit(1)
 	}
 
