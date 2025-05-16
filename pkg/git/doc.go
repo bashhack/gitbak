@@ -7,17 +7,17 @@
 //
 // # Core Components
 //
-// - Gitbak: Main type that manages a Git repository and performs automatic commits
-// - CommandExecutor: Interface for executing Git commands
-// - UserInteractor: Interface for user interaction during Git operations
+//   - Gitbak: Main type that manages a Git repository and performs automatic commits
+//   - CommandExecutor: Interface for executing Git commands
+//   - UserInteractor: Interface for user interaction during Git operations
 //
 // # Features
 //
-// - Automatic Git operations with configurable intervals
-// - Sequential commit numbering with the ability to continue from a previous session
-// - Branch creation and management
-// - Error handling with configurable retry logic
-// - Clean session termination with statistics
+//   - Automatic Git operations with configurable intervals
+//   - Sequential commit numbering with the ability to continue from a previous session
+//   - Branch creation and management
+//   - Error handling with configurable retry logic
+//   - Clean session termination with statistics
 //
 // # Usage
 //
@@ -59,9 +59,9 @@
 //
 // The package implements sophisticated error recovery with configurable retry mechanisms:
 //
-// - Consecutive identical errors are counted and compared against MaxRetries
-// - When errors change or successful operations occur, the error counter resets
-// - Setting MaxRetries to 0 makes the system retry indefinitely
+//   - Consecutive identical errors are counted and compared against MaxRetries
+//   - When errors change or successful operations occur, the error counter resets
+//   - Setting MaxRetries to 0 makes the system retry indefinitely
 //
 // # Implementation Notes
 //
@@ -79,7 +79,7 @@
 //
 // This package requires:
 //
-// - A functional Git installation in the system PATH
-// - A valid Git repository at the configured path
-// - Write permissions for the repository
+//   - A functional Git installation in the system PATH
+//   - A valid Git repository at the configured path
+//   - Write permissions for the repository
 package git

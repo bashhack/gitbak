@@ -137,7 +137,7 @@ gitbak -help
 | Configuration   | Command-line flags and environment variables |
 | Resource usage  | ~5-6 MB                                      |
 
-## Development
+## 🧑‍💻 Development
 
 ```bash
 # Clone the repository

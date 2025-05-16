@@ -7,28 +7,28 @@
 //
 // # Core Components
 //
-// - Logger: The main interface for logging used throughout the application
-// - DefaultLogger: Standard implementation that writes to console and/or file
+//   - Logger: The main interface for logging used throughout the application
+//   - DefaultLogger: Standard implementation that writes to console and/or file
 //
 // # Features
 //
-// - Multiple log levels (Info, Warning, Error, Success)
-// - Colored output for terminal visibility
-// - File logging with rotation
-// - User-facing vs. debug-only messages
-// - Conditional logging based on verbosity settings
+//   - Multiple log levels (Info, Warning, Error, Success)
+//   - Emoji-prefixed output for terminal visibility
+//   - File logging with rotation
+//   - User-facing vs. debug-only messages
+//   - Conditional logging based on verbosity settings
 //
 // # Log Levels
 //
 // The logger supports the following distinct message types:
 //
-// - Info: General information messages
-// - InfoToUser: Important information to display to the user
-// - Warning: Warning messages for potential issues
-// - WarningToUser: Important warnings to display to the user
-// - Error: Error messages for failures
-// - Success: Success messages for completed operations
-// - StatusMessage: Current status updates
+//   - Info: General information messages
+//   - InfoToUser: Important information to display to the user
+//   - Warning: Warning messages for potential issues
+//   - WarningToUser: Important warnings to display to the user
+//   - Error: Error messages for failures
+//   - Success: Success messages for completed operations
+//   - StatusMessage: Current status updates
 //
 // # Usage
 //
@@ -74,13 +74,14 @@
 //
 // # Console Output
 //
-// Console output is formatted with colors and prefixes to distinguish different
+// Console output is formatted with emoji prefixes to distinguish different
 // message types:
 //
-// - Info: White text with [INFO] prefix (only shown when verbose)
-// - Warning: Yellow text with [WARNING] prefix
-// - Error: Red text with [ERROR] prefix
-// - Success: Green text with [SUCCESS] prefix
+//   - Info: ℹ️ prefix (for InfoToUser messages)
+//   - Warning: ⚠️ prefix (only shown when verbose, unless WarningToUser)
+//   - Error: ❌ prefix
+//   - Success: ✅ prefix
+//   - Debug Log Enabled: 🔍 prefix
 //
 // Messages directed specifically to users (InfoToUser, WarningToUser) are
 // always displayed regardless of verbosity settings.

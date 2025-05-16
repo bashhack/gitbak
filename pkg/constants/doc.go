@@ -6,8 +6,8 @@
 //
 // # Core Components
 //
-// - Logo: ASCII art representation of the gitbak logo
-// - Tagline: The application's tagline/motto
+//   - Logo: ASCII art representation of the gitbak logo
+//   - Tagline: The application's tagline/motto
 //
 // # Usage
 //

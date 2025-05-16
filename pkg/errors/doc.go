@@ -7,8 +7,8 @@
 //
 // # Features
 //
-// - Error wrapping with context
-// - Standardized error formatting
+//   - Error wrapping with context
+//   - Standardized error formatting
 //
 // # Usage
 //
@@ -34,9 +34,9 @@
 // Errors created with this package provide consistent, formatted error messages
 // that include:
 //
-// - The error context (what operation was being attempted)
-// - The underlying error message
-// - Optional formatting with variable values
+//   - The error context (what operation was being attempted)
+//   - The underlying error message
+//   - Optional formatting with variable values
 //
 // # Compatibility
 //

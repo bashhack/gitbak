@@ -7,14 +7,14 @@
 //
 // # Core Components
 //
-// - Locker: Main type that manages lock files
+//   - Locker: Main type that manages lock files
 //
 // # Features
 //
-// - Repository-specific lock files
-// - Process ID tracking to identify lock ownership
-// - Stale lock detection and cleanup
-// - Clean error messages for lock conflicts
+//   - Repository-specific lock files
+//   - Process ID tracking to identify lock ownership
+//   - Stale lock detection and cleanup
+//   - Clean error messages for lock conflicts
 //
 // # Usage
 //
@@ -50,13 +50,6 @@
 //
 // Where <repo-hash> is a hash of the repository's absolute path.
 //
-// # Error Handling
-//
-// The package provides specific error types for common lock-related issues:
-//
-// - ErrLockExists: Another process holds the lock
-// - ErrLockFailed: Failed to create or acquire the lock
-//
 // # Cleanup
 //
 // Lock files are automatically removed when the lock is released or when
@@ -74,7 +67,7 @@
 // This package relies on the ability to create and write to files in the
 // system's temporary directory. It requires:
 //
-// - Write permissions to the temporary directory
-// - A filesystem that supports exclusive file creation
-// - OS-level process ID information
+//   - Write permissions to the temporary directory
+//   - A filesystem that supports exclusive file creation
+//   - OS-level process ID information
 package lock

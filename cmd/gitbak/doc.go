@@ -18,14 +18,14 @@
 //
 // # Features
 //
-// - Automatically commits changes at specified intervals (default: 5 minutes)
-// - Creates a dedicated branch for backup commits (configurable)
-// - Handles concurrent executions safely with file locking
-// - Continuous tracking with sequential commit numbering
-// - Support for continuing sessions after breaks or interruptions
-// - Robust error handling with configurable retry limits
-// - Smart retry logic that resets on different errors or successful operations
-// - Terminal disconnect protection (SIGHUP handling)
+//   - Automatically commits changes at specified intervals (default: 5 minutes)
+//   - Creates a dedicated branch for backup commits (configurable)
+//   - Handles concurrent executions safely with file locking
+//   - Continuous tracking with sequential commit numbering
+//   - Support for continuing sessions after breaks or interruptions
+//   - Robust error handling with configurable retry limits
+//   - Smart retry logic that resets on different errors or successful operations
+//   - Terminal disconnect protection (SIGHUP handling)
 //
 // # Basic Usage
 //
@@ -58,10 +58,13 @@
 //  1. -no-branch: Tells gitbak to use the current branch instead of creating a new one.
 //     When this flag is not specified, gitbak creates a new timestamped branch.
 //
-// 2. -continue: Used when resuming a previous gitbak session. This flag:
-//   - Automatically stays on the current branch (implicitly includes -no-branch behavior)
-//   - Identifies the last commit number used by gitbak and continues numbering sequentially
-//   - Preserves branch history and continues tracking from where you left off
+//  2. -continue: Used when resuming a previous gitbak session. This flag:
+//
+//     a. Automatically stays on the current branch (implicitly includes -no-branch behavior)
+//
+//     b. Identifies the last commit number used by gitbak and continues numbering sequentially
+//
+//     c. Preserves branch history and continues tracking from where you left off
 //
 // # After Your Session
 //
