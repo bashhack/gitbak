@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bashhack/gitbak/internal/config"
+	"github.com/bashhack/gitbak/pkg/config"
 )
 
 // Version information - injected at build time

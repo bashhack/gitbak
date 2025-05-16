@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/bashhack/gitbak/internal/logger"
+	"github.com/bashhack/gitbak/pkg/logger"
 )
 
 // UserInteractor defines an interface for interacting with the user

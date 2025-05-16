@@ -2,9 +2,9 @@ package git
 
 import (
 	"context"
-	"github.com/bashhack/gitbak/internal/config"
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
-	"github.com/bashhack/gitbak/internal/logger"
+	"github.com/bashhack/gitbak/pkg/config"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
+	"github.com/bashhack/gitbak/pkg/logger"
 	"os"
 	"path/filepath"
 	"strings"

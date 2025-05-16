@@ -5,7 +5,7 @@ import (
 	"context"
 	"os/exec"
 
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
 )
 
 // CommandExecutor defines an interface for executing commands

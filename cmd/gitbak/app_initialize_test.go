@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bashhack/gitbak/internal/config"
-	"github.com/bashhack/gitbak/internal/lock"
-	"github.com/bashhack/gitbak/internal/logger"
+	"github.com/bashhack/gitbak/pkg/config"
+	"github.com/bashhack/gitbak/pkg/lock"
+	"github.com/bashhack/gitbak/pkg/logger"
 )
 
 type customError struct {

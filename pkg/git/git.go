@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
-	"github.com/bashhack/gitbak/internal/logger"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
+	"github.com/bashhack/gitbak/pkg/logger"
 )
 
 // GitbakConfig contains configuration for a gitbak instance.

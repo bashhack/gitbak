@@ -38,6 +38,6 @@ ignore:
   - "docs/**/*"                   # Documentation
   - "**/*.md"                     # Markdown files
   - "cmd/gitbak/app_test_helpers.go"  # Test helper functions
-  - "internal/git/mocks.go"       # Mock implementations
-  - "internal/git/test_helpers.go"  # Test helper functions
+  - "pkg/git/mocks.go"       # Mock implementations
+  - "pkg/git/test_helpers.go"  # Test helper functions
   - "**/*test_helpers.go"         # Any other test helper files

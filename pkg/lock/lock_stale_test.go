@@ -2,7 +2,7 @@ package lock
 
 import (
 	"fmt"
-	gitbakErrors "github.com/bashhack/gitbak/internal/errors"
+	gitbakErrors "github.com/bashhack/gitbak/pkg/errors"
 	"os"
 	"path/filepath"
 	"strconv"

@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/bashhack/gitbak/internal/config"
-	"github.com/bashhack/gitbak/internal/logger"
+	"github.com/bashhack/gitbak/pkg/config"
+	"github.com/bashhack/gitbak/pkg/logger"
 )
 
 // TestAppRunScenarios tests various scenarios for the Run method

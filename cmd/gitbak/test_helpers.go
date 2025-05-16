@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/bashhack/gitbak/internal/config"
+	"github.com/bashhack/gitbak/pkg/config"
 	"os"
 	"os/exec"
 	"path/filepath"
