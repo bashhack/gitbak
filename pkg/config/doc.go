@@ -7,16 +7,16 @@
 //
 // # Core Components
 //
-// - Config: Main configuration type that holds all gitbak settings
-// - VersionInfo: Type for version, commit, and build date information
+//   - Config: Main configuration type that holds all gitbak settings
+//   - VersionInfo: Type for version, commit, and build date information
 //
 // # Configuration Sources
 //
 // Configuration values are loaded with the following precedence:
 //
-// 1. Command-line flags (highest priority)
-// 2. Environment variables
-// 3. Default values (lowest priority)
+//  1. Command-line flags (highest priority)
+//  2. Environment variables
+//  3. Default values (lowest priority)
 //
 // # Environment Variables
 //
@@ -72,4 +72,7 @@
 // The Config type is not designed to be thread-safe. Configuration is typically
 // loaded at startup and then used in a read-only fashion by the application.
 // Concurrent modifications to a Config instance are not supported.
+//
+// Future improvements may include thread-safe access patterns (in the vein
+// of the ThreadSafeConfig)- but for now, the focus is on simplicity and ease of use.
 package config
