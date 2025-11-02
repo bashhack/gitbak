@@ -7,10 +7,15 @@ on:
   pull_request:
     branches: [ main ]  # Run on PRs to main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-go:
     name: Test Go Implementation
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
     strategy:
       fail-fast: false  # Continue with other jobs if one fails
       matrix:
@@ -85,12 +90,13 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [test-go]
     if: github.ref_type == 'tag'
 
     # Note: This job requires a 'RELEASE_TOKEN' secret (a personal access token with 'repo' permissions)
     # The token allows GitHub release creation to trigger subsequent workflow runs
-    
+
     permissions:
       contents: write
       packages: write
